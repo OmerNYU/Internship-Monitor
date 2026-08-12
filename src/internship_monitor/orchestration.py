@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import httpx
 
@@ -14,6 +15,7 @@ from internship_monitor.adapters import (
     SourceRunSuccess,
     run_adapters,
 )
+from internship_monitor.alerts import AlertDecision, AlertPolicy
 from internship_monitor.analysis import (
     JobAssessment,
     RoleClassifier,
@@ -31,6 +33,10 @@ from internship_monitor.state import JobStateRepository, ListingChange, ListingO
 AdapterFactory = Callable[[CompanyConfig], SourceAdapter]
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 @dataclass(frozen=True, slots=True)
 class MonitoringRunResult:
     """Source, assessment, opportunity, and listing-state results from one run."""
@@ -39,6 +45,7 @@ class MonitoringRunResult:
     assessments: tuple[JobAssessment, ...]
     observations: tuple[ListingObservation, ...]
     opportunity_groups: tuple[OpportunityGroup, ...]
+    alert_decisions: tuple[AlertDecision, ...]
 
     @property
     def listing_count(self) -> int:
@@ -150,11 +157,18 @@ async def _run_monitor(
         )
     )
 
+    run_time = _utc_now()
+    alert_decisions = tuple(
+        AlertPolicy().decide(group, assessments, observations, now=run_time)
+        for group in opportunity_groups
+    )
+
     return MonitoringRunResult(
         source_results=source_results,
         assessments=assessments,
         observations=observations,
         opportunity_groups=opportunity_groups,
+        alert_decisions=alert_decisions,
     )
 
 

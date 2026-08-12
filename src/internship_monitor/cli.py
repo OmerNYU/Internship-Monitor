@@ -67,7 +67,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "status":
         print(
             f"Internship Monitor {__version__}: analysis, persisted monitoring, "
-            "and opportunity grouping ready"
+            "and alert decisions ready"
         )
         return 0
 
@@ -112,6 +112,7 @@ def _run_summary(result: MonitoringRunResult, *, dry_run: bool) -> str:
     return (
         f"{mode} complete: {len(result.source_results)} source runs, "
         f"{result.listing_count} listings, {result.opportunity_count} opportunities, "
+        f"{len(result.alert_decisions)} alert decisions, "
         f"{len(result.assessments)} assessments, {result.source_failure_count} failures; "
         f"state changes: {changes or 'none'}. {state_note} and no notifications were sent."
     )

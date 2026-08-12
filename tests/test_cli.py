@@ -17,7 +17,7 @@ class CliTests(TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertIn(__version__, output.getvalue())
-        self.assertIn("opportunity grouping ready", output.getvalue())
+        self.assertIn("alert decisions ready", output.getvalue())
 
     def test_dry_run_does_not_create_or_change_state(self) -> None:
         with TemporaryDirectory() as directory:

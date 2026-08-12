@@ -90,6 +90,7 @@ class MonitoringCompositionTests(TestCase):
         self.assertIsInstance(result.source_results[1], SourceRunFailure)
         self.assertEqual(result.listing_count, 1)
         self.assertEqual(result.opportunity_count, 1)
+        self.assertEqual(len(result.alert_decisions), 1)
         self.assertEqual(result.source_failure_count, 1)
         self.assertEqual(len(result.assessments), 1)
         self.assertEqual(result.assessments[0].recommendation, Recommendation.APPLY_IMMEDIATELY)
