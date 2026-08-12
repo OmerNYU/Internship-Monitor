@@ -1,0 +1,105 @@
+name: Internship Monitor Observation
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+      timezone: "Asia/Karachi"
+  workflow_dispatch:
+    inputs:
+      initialize_state:
+        description: "Permit first-run state initialization when no artifact exists"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: internship-monitor-production
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install application
+        run: python -m pip install .
+
+      - name: Restore and validate authoritative state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          INITIALIZE_STATE: ${{ inputs.initialize_state || false }}
+        run: |
+          mkdir -p state
+          artifact_json="$(
+            curl --fail --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=internship-monitor-state&per_page=100"
+          )"
+          artifact_id="$(printf '%s' "${artifact_json}" | jq -r \
+            '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .id // empty')"
+          if [ -z "${artifact_id}" ]; then
+            if [ "${INITIALIZE_STATE}" = "true" ]; then
+              echo "No prior state artifact found; explicit initialization is allowed."
+              exit 0
+            fi
+            echo "Authoritative state artifact is unavailable. Re-run manually with initialize_state=true for a deliberate first-run bootstrap." >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --location \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+            --output /tmp/internship-monitor-state.zip
+          unzip -q /tmp/internship-monitor-state.zip -d .
+          python -m internship_monitor.deployment.state_bundle validate --state-dir state
+
+      - name: Materialize private monitor configuration
+        env:
+          PROFILE_CONFIG_YAML: ${{ secrets.INTERNSHIP_MONITOR_PROFILE_YAML }}
+          COMPANIES_CONFIG_YAML: ${{ secrets.INTERNSHIP_MONITOR_COMPANIES_YAML }}
+        run: |
+          if [ -z "${PROFILE_CONFIG_YAML}" ] || [ -z "${COMPANIES_CONFIG_YAML}" ]; then
+            echo "Required monitor configuration secrets are unavailable." >&2
+            exit 1
+          fi
+          mkdir -p config.local
+          printf '%s' "${PROFILE_CONFIG_YAML}" > config.local/profile.yaml
+          printf '%s' "${COMPANIES_CONFIG_YAML}" > config.local/companies.yaml
+
+      - name: Observe and queue
+        run: |
+          internship-monitor run \
+            --profile config.local/profile.yaml \
+            --companies config.local/companies.yaml \
+            --state state/jobs.sqlite3 \
+            --notification-state state/notifications.sqlite3 \
+            --queue-notifications
+
+      - name: Emit operational summary
+        run: |
+          internship-monitor status \
+            --state state/jobs.sqlite3 \
+            --notification-state state/notifications.sqlite3 | tee -a "${GITHUB_STEP_SUMMARY}"
+
+      - name: Create state manifest
+        run: python -m internship_monitor.deployment.state_bundle create --state-dir state
+
+      - name: Upload authoritative state
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: internship-monitor-state
+          path: state
+          retention-days: 90
+          if-no-files-found: error

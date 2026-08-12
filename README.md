@@ -1,24 +1,23 @@
 # Internship Monitor
 
-Internship Monitor is a configurable system for discovering internships, evaluating their
-relevance, identifying likely eligibility issues, and delivering explainable alerts.
-
-The initial monitor targets Summer 2027 engineering, AI, data, technical product, and
-consulting opportunities. EMEA and APAC are the primary geographic focus regions. Regional
-preference affects relevance; it never substitutes for evidence about work authorization.
+Internship Monitor discovers internship listings, assesses their relevance and likely
+eligibility, groups matching opportunities, and safely queues explainable alerts. Its current
+search focus is Summer 2027 engineering, AI, data, technical product, and consulting roles,
+with EMEA and APAC as the primary geographic focus. Regional preference improves relevance; it
+never substitutes for evidence about work authorisation or language requirements.
 
 ## Project status
 
-Sessions 1 through 4 establish the repository foundation, canonical job model, validated public
-configuration, failure-isolated source adapter contract, and Greenhouse source adapter. Analysis,
-persistence, notifications, and scheduling are intentionally not implemented yet.
-
-## Requirements
-
-- Python 3.12
-- `uv` (recommended package and environment manager)
+Sessions 1â€“18 are implemented. The project has a canonical job model, strict public/private
+configuration, failure-isolated async source adapters, a Greenhouse adapter, deterministic role
+and eligibility assessment, country/region preferences, durable listing transitions, grouping,
+alert policy, notification queueing with retries and daily-digest support, and structured
+operational reporting. Email and WhatsApp delivery exist as local, explicit `deliver` capability;
+the GitHub Actions deployment deliberately does **not** invoke delivery yet.
 
 ## Local setup
+
+Requirements: Python 3.12 and `uv` (recommended).
 
 ```bash
 uv python install 3.12
@@ -29,35 +28,67 @@ uv run ruff check .
 uv run mypy
 ```
 
-Until `uv` is available, the dependency-free status command can also run with Python directly:
+For a dependency-free status check:
 
 ```bash
 PYTHONPATH=src python -m internship_monitor status
 ```
 
-## Configuration and privacy
+## Local operation and privacy
 
-Public examples live under `config/`. Personal profiles, notification settings, credentials,
-and operational state belong under ignored paths such as `config.local/`, `.env`, and `state/`.
+Public examples live in `config/`. Put your personal profile, notification settings,
+credentials, and operational state in ignored locations such as `config.local/`, `.env`, and
+`state/`. Never commit contact details, work-authorisation records, provider credentials, or
+alert history.
 
-Never commit real contact details, authorization records, provider credentials, or alert history.
+The normal monitor path only discovers, assesses, persists, and optionally queues alerts:
 
-The regional configuration in [`config/profile.example.yaml`](config/profile.example.yaml) is an
-example, not legal guidance. A future user should be able to customize it without changing the
-classifier source code.
+```bash
+uv run internship-monitor run \
+  --profile config.local/profile.yaml \
+  --companies config.local/companies.yaml \
+  --queue-notifications
+```
+
+`run` never sends external messages. `deliver` is the only command that can use private
+notification-provider settings, and `deliver --dry-run` is a read-only preview. `status` is also
+read-only: it reports state counts and the latest safe monitor/delivery summaries, and clearly
+reports uninitialised paths without creating databases.
+
+## GitHub Actions observation rollout
+
+The private repository contains one observation-only workflow at
+`.github/workflows/monitor.yml`. It runs every 30 minutes in the `Asia/Karachi` schedule
+timezone, supports manual dispatch, and serialises all production state users. It invokes only
+`internship-monitor run --queue-notifications` and `internship-monitor status`; it does not
+invoke `deliver` and does not require email or WhatsApp secrets.
+
+Before enabling the workflow, set these multiline GitHub Actions secrets from your private YAML
+files:
+
+- `INTERNSHIP_MONITOR_PROFILE_YAML`
+- `INTERNSHIP_MONITOR_COMPANIES_YAML`
+
+Operational state is a private, unencrypted GitHub Actions artifact named
+`internship-monitor-state`, retained for 90 days. It contains `state/jobs.sqlite3`,
+`state/notifications.sqlite3`, and `state/manifest.json`. The manifest has a format version and
+SHA-256 checksums; restore validates both checksums and SQLite integrity before discovery starts.
+Artifacts, rather than cache or Git history, are the authoritative V1 state store.
+
+The first run must be a deliberate manual dispatch with `initialize_state=true`. Ordinary
+manual and scheduled runs fail safely when the newest usable state artifact is missing, expired,
+unavailable, or corrupt. To recover from a permanently lost artifact, inspect the reason, then
+use that same deliberate bootstrap input; this starts fresh listing/notification history.
 
 ## Architecture boundaries
 
-The core pipeline will remain source- and notifier-independent:
-
 ```text
-source adapters -> canonical listings -> deterministic analysis -> alert decisions -> notifiers
+source adapters -> canonical listings -> deterministic analysis -> alert decisions -> queued notifications -> explicit delivery
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) for the initial module boundaries and
+Source adapters do not depend on analysis, scoring, persistence, or notification providers.
+Operational status is derived from typed, persisted summary models rather than CLI text.
+
+See [`docs/architecture.md`](docs/architecture.md) and
 [`docs/decisions/001-emea-apac-priority.md`](docs/decisions/001-emea-apac-priority.md) for the
-approved regional amendment.
-
-The latest implementation record is
-[`docs/sessions/004-greenhouse-adapter.md`](docs/sessions/004-greenhouse-adapter.md).
-
+foundational architecture and regional amendment.

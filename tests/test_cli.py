@@ -24,7 +24,8 @@ class CliTests(TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertIn(__version__, output.getvalue())
-        self.assertIn("durable delivery scheduling", output.getvalue())
+        self.assertIn("operational status", output.getvalue())
+        self.assertIn("not initialized", output.getvalue())
 
     def test_dry_run_does_not_create_or_change_state(self) -> None:
         with TemporaryDirectory() as directory:

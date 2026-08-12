@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 from internship_monitor import __version__
@@ -29,6 +30,9 @@ from internship_monitor.orchestration import (
     run_configured_dry_run,
     run_configured_monitoring_run,
 )
+from internship_monitor.reporting.models import SystemStatus
+from internship_monitor.reporting.service import delivery_run_summary, monitor_run_summary
+from internship_monitor.reporting.status import system_status
 from internship_monitor.state import JobStateRepository, ListingChange
 
 
@@ -41,9 +45,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=__version__)
 
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser(
+    status_parser = subparsers.add_parser(
         "status",
-        help="Confirm that the local application entry point is healthy.",
+        help="Read current persisted monitoring and notification health without changing state.",
+    )
+    status_parser.add_argument(
+        "--state",
+        type=Path,
+        default=Path("state/jobs.sqlite3"),
+        help="Path to local SQLite listing state.",
+    )
+    status_parser.add_argument(
+        "--notification-state",
+        type=Path,
+        default=Path("state/notifications.sqlite3"),
+        help="Path to local queued-notification state.",
     )
     run_parser = subparsers.add_parser(
         "run",
@@ -121,11 +137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "status":
-        print(
-            f"Internship Monitor {__version__}: analysis, persisted monitoring, "
-            "alert decisions, durable delivery scheduling, local previews, "
-            "and optional WhatsApp delivery ready"
-        )
+        print(_status_summary(system_status(args.state, args.notification_state)))
         return 0
 
     if args.command == "deliver":
@@ -159,13 +171,32 @@ def main(argv: Sequence[str] | None = None) -> int:
                     repository=repository,
                 )
             )
+            queued_count = 0
+            if args.queue_notifications:
+                args.notification_state.parent.mkdir(parents=True, exist_ok=True)
+                with NotificationQueueRepository(
+                    args.notification_state
+                ) as notification_repository:
+                    queued_count = len(
+                        NotificationScheduler().queue(
+                            result.alert_decisions,
+                            notification_repository,
+                        )
+                    )
+            repository.record_monitor_summary(
+                monitor_run_summary(
+                    result,
+                    run_at=_utc_now(),
+                    sources_configured=sum(
+                        company.enabled for company in company_allowlist.companies
+                    ),
+                    alerts_queued=queued_count,
+                )
+            )
         print(_run_summary(result, dry_run=False))
         if args.queue_notifications:
-            args.notification_state.parent.mkdir(parents=True, exist_ok=True)
-            with NotificationQueueRepository(args.notification_state) as repository:
-                queued = NotificationScheduler().queue(result.alert_decisions, repository)
             print(
-                f"Notification scheduling complete: {len(queued)} alerts queued; "
+                f"Notification scheduling complete: {queued_count} alerts queued; "
                 "no notifications sent."
             )
         if args.preview_notifications:
@@ -230,9 +261,22 @@ def _deliver_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
     with NotificationQueueRepository(args.notification_state) as repository:
         reports = asyncio.run(scheduler.deliver_due(repository, notifiers))
         states = tuple(repository.get(report.notification.idempotency_key) for report in reports)
-    delivered = sum(state is not None and state.status is QueueStatus.DELIVERED for state in states)
-    retrying = sum(state is not None and state.status is QueueStatus.PENDING for state in states)
-    failed = sum(state is not None and state.status is QueueStatus.FAILED for state in states)
+        delivered = sum(
+            state is not None and state.status is QueueStatus.DELIVERED for state in states
+        )
+        retrying = sum(
+            state is not None and state.status is QueueStatus.PENDING for state in states
+        )
+        failed = sum(state is not None and state.status is QueueStatus.FAILED for state in states)
+        repository.record_delivery_summary(
+            delivery_run_summary(
+                run_at=_utc_now(),
+                due_notifications=len(reports),
+                notifications_delivered=delivered,
+                retries_pending=retrying,
+                terminal_failures=failed,
+            )
+        )
     print(
         f"Delivery complete: {len(reports)} due notifications processed, {delivered} delivered, "
         f"{retrying} retrying, {failed} terminal failures."
@@ -249,3 +293,48 @@ def _external_notifiers(
     if configuration.whatsapp.enabled:
         notifiers.append(WhatsAppNotifier(configuration.whatsapp))
     return tuple(notifiers)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _status_summary(status: SystemStatus) -> str:
+    sections = [f"Internship Monitor {__version__} operational status"]
+    if status.listings is None:
+        sections.append("Listing state: not initialized.")
+    else:
+        sections.append(
+            "Listing state: "
+            f"{status.listings.total_known} known, {status.listings.active} active, "
+            f"{status.listings.inactive} inactive."
+        )
+    if status.notifications is None:
+        sections.append("Notification queue: not initialized.")
+    else:
+        sections.append(
+            "Notification queue: "
+            f"due now={status.notifications.due_now}, "
+            f"scheduled={status.notifications.scheduled}, "
+            f"retries pending={status.notifications.retries_pending}, "
+            f"terminal failures={status.notifications.terminal_failures}, "
+            f"digest candidates={status.notifications.digest_candidates}, "
+            f"delivered={status.notifications.delivered}."
+        )
+    if status.last_monitor_run is not None:
+        sections.append(
+            "Last monitor run: "
+            f"{status.last_monitor_run.sources_successful}/"
+            f"{status.last_monitor_run.sources_configured} sources successful, "
+            f"{status.last_monitor_run.listings_seen} listings seen, "
+            f"{status.last_monitor_run.alerts_queued} alerts queued."
+        )
+    if status.last_delivery_run is not None:
+        sections.append(
+            "Last delivery run: "
+            f"{status.last_delivery_run.due_notifications} due, "
+            f"{status.last_delivery_run.notifications_delivered} delivered, "
+            f"{status.last_delivery_run.retries_pending} retrying, "
+            f"{status.last_delivery_run.terminal_failures} terminal failures."
+        )
+    return "\n".join(sections)

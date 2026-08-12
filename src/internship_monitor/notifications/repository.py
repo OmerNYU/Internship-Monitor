@@ -14,6 +14,7 @@ from internship_monitor.notifications.models import (
     QueuedNotification,
     QueueStatus,
 )
+from internship_monitor.reporting.models import DeliveryRunSummary, NotificationQueueCounts
 
 
 def _utc_now() -> datetime:
@@ -289,6 +290,115 @@ class NotificationQueueRepository:
                 )
         return status
 
+    def queue_counts(self, *, now: datetime | None = None) -> NotificationQueueCounts:
+        """Return safe aggregate queue health without exposing notification content."""
+        moment = now or _utc_now()
+        _require_aware(moment)
+        row = self._connection.execute(
+            """
+            SELECT
+                COALESCE(SUM(
+                    CASE
+                        WHEN status = ? AND kind IN (?, ?) AND next_attempt_at <= ? THEN 1
+                        ELSE 0
+                    END
+                ), 0) AS due_now,
+                COALESCE(SUM(
+                    CASE
+                        WHEN status = ? AND attempts = 0 AND next_attempt_at > ? THEN 1
+                        ELSE 0
+                    END
+                ), 0) AS scheduled,
+                COALESCE(SUM(
+                    CASE
+                        WHEN status = ? AND attempts > 0 THEN 1
+                        ELSE 0
+                    END
+                ), 0) AS retries_pending,
+                COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS terminal_failures,
+                COALESCE(SUM(CASE WHEN kind = ? THEN 1 ELSE 0 END), 0) AS digest_candidates,
+                COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS delivered
+            FROM notification_queue
+            """,
+            (
+                QueueStatus.PENDING.value,
+                NotificationKind.ALERT.value,
+                NotificationKind.DAILY_DIGEST.value,
+                _timestamp_text(moment),
+                QueueStatus.PENDING.value,
+                _timestamp_text(moment),
+                QueueStatus.PENDING.value,
+                QueueStatus.FAILED.value,
+                NotificationKind.DIGEST_CANDIDATE.value,
+                QueueStatus.DELIVERED.value,
+            ),
+        ).fetchone()
+        assert row is not None
+        return NotificationQueueCounts(
+            due_now=int(row["due_now"]),
+            scheduled=int(row["scheduled"]),
+            retries_pending=int(row["retries_pending"]),
+            terminal_failures=int(row["terminal_failures"]),
+            digest_candidates=int(row["digest_candidates"]),
+            delivered=int(row["delivered"]),
+        )
+
+    def record_delivery_summary(self, summary: DeliveryRunSummary) -> None:
+        """Persist one safe delivery summary and retain only the newest 30."""
+        self._require_writable()
+        _require_aware(summary.run_at)
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO delivery_run_summary (
+                    run_at, due_notifications, notifications_delivered,
+                    retries_pending, terminal_failures
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    _timestamp_text(summary.run_at),
+                    summary.due_notifications,
+                    summary.notifications_delivered,
+                    summary.retries_pending,
+                    summary.terminal_failures,
+                ),
+            )
+            self._connection.execute(
+                """
+                DELETE FROM delivery_run_summary
+                WHERE id NOT IN (
+                    SELECT id
+                    FROM delivery_run_summary
+                    ORDER BY id DESC
+                    LIMIT 30
+                )
+                """
+            )
+
+    def latest_delivery_summary(self) -> DeliveryRunSummary | None:
+        """Return the newest safe delivery summary, if one has been recorded."""
+        try:
+            row = self._connection.execute(
+                """
+                SELECT run_at, due_notifications, notifications_delivered,
+                       retries_pending, terminal_failures
+                FROM delivery_run_summary
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        if row is None:
+            return None
+        return DeliveryRunSummary(
+            run_at=_parse_timestamp(row["run_at"]),
+            due_notifications=int(row["due_notifications"]),
+            notifications_delivered=int(row["notifications_delivered"]),
+            retries_pending=int(row["retries_pending"]),
+            terminal_failures=int(row["terminal_failures"]),
+        )
+
     def _create_schema(self) -> None:
         self._connection.execute(
             """
@@ -305,6 +415,18 @@ class NotificationQueueRepository:
                 digest_key TEXT,
                 candidate_state TEXT,
                 digest_category TEXT
+            )
+            """
+        )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS delivery_run_summary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_at TEXT NOT NULL,
+                due_notifications INTEGER NOT NULL,
+                notifications_delivered INTEGER NOT NULL,
+                retries_pending INTEGER NOT NULL,
+                terminal_failures INTEGER NOT NULL
             )
             """
         )
