@@ -113,6 +113,7 @@ class NotificationsTests(TestCase):
 
         self.assertIn("Software Engineer Intern", notification.subject)
         self.assertIn("https://example.com/jobs/notification-test", notification.body)
+        assert notification.decision is not None
         self.assertEqual(
             notification.decision.opportunity.canonical_listing.source_job_id, "notification-test"
         )
