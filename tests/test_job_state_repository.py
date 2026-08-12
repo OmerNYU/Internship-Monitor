@@ -122,3 +122,59 @@ class JobStateRepositoryTests(TestCase):
                 source_type="lever",
                 company="Example Company",
             )
+
+    def test_dry_comparison_does_not_mutate_existing_state(self) -> None:
+        with (
+            TemporaryDirectory() as directory,
+            JobStateRepository(Path(directory) / "jobs.sqlite3") as repository,
+        ):
+            repository.record_successful_source_run(
+                (listing(),),
+                source_type="greenhouse",
+                company="Example Company",
+            )
+            changed = listing(description="Changed description.")
+            first = repository.compare_successful_source_run(
+                (changed,),
+                source_type="greenhouse",
+                company="Example Company",
+            )
+            second = repository.compare_successful_source_run(
+                (changed,),
+                source_type="greenhouse",
+                company="Example Company",
+            )
+            original = repository.compare_successful_source_run(
+                (listing(),),
+                source_type="greenhouse",
+                company="Example Company",
+            )
+
+        self.assertEqual(first[0].change, ListingChange.UPDATED)
+        self.assertEqual(second[0].change, ListingChange.UPDATED)
+        self.assertEqual(original[0].change, ListingChange.UNCHANGED)
+
+    def test_read_only_missing_repository_compares_as_new_without_creating_file(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "missing" / "jobs.sqlite3"
+            with JobStateRepository(path, read_only=True) as repository:
+                observations = repository.compare_successful_source_run(
+                    (listing(),),
+                    source_type="greenhouse",
+                    company="Example Company",
+                )
+
+            self.assertEqual(observations[0].change, ListingChange.NEW)
+            self.assertFalse(path.exists())
+
+    def test_read_only_repository_rejects_persistence(self) -> None:
+        with (
+            TemporaryDirectory() as directory,
+            JobStateRepository(Path(directory) / "missing.sqlite3", read_only=True) as repository,
+            self.assertRaisesRegex(RuntimeError, "read-only"),
+        ):
+            repository.record_successful_source_run(
+                (listing(),),
+                source_type="greenhouse",
+                company="Example Company",
+            )

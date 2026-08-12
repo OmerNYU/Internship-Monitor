@@ -1,4 +1,4 @@
-"""Small application composition for dry runs, without persistence or notifications."""
+"""Application composition for dry and persisted monitoring runs."""
 
 from __future__ import annotations
 
@@ -25,16 +25,20 @@ from internship_monitor.analysis import (
 )
 from internship_monitor.config import CompanyAllowlist, CompanyConfig, SearchConfiguration
 from internship_monitor.models import JobListing
+from internship_monitor.opportunities import OpportunityGroup, OpportunityGrouper
+from internship_monitor.state import JobStateRepository, ListingChange, ListingObservation
 
 AdapterFactory = Callable[[CompanyConfig], SourceAdapter]
 
 
 @dataclass(frozen=True, slots=True)
-class DryRunResult:
-    """Source outcomes and scored listings produced without external side effects."""
+class MonitoringRunResult:
+    """Source, assessment, opportunity, and listing-state results from one run."""
 
     source_results: tuple[SourceRunResult, ...]
     assessments: tuple[JobAssessment, ...]
+    observations: tuple[ListingObservation, ...]
+    opportunity_groups: tuple[OpportunityGroup, ...]
 
     @property
     def listing_count(self) -> int:
@@ -49,6 +53,18 @@ class DryRunResult:
     def source_failure_count(self) -> int:
         """Return the count of source runs that failed in isolation."""
         return sum(not isinstance(result, SourceRunSuccess) for result in self.source_results)
+
+    @property
+    def opportunity_count(self) -> int:
+        """Return the number of distinct or conservatively grouped opportunities."""
+        return len(self.opportunity_groups)
+
+    def change_count(self, change: ListingChange) -> int:
+        """Count observations with one listing-state transition."""
+        return sum(observation.change is change for observation in self.observations)
+
+
+DryRunResult = MonitoringRunResult
 
 
 class _UnsupportedSourceAdapter:
@@ -66,60 +82,206 @@ async def run_dry_run(
     company_allowlist: CompanyAllowlist,
     *,
     adapter_factory: AdapterFactory,
-) -> DryRunResult:
-    """Fetch, analyze, and score enabled sources without state writes or notifications."""
+    repository: JobStateRepository | None = None,
+) -> MonitoringRunResult:
+    """Fetch, assess, group, and compare without state mutation or notifications."""
+    return await _run_monitor(
+        search_configuration,
+        company_allowlist,
+        adapter_factory=adapter_factory,
+        repository=repository,
+        persist=False,
+    )
+
+
+async def run_persisted_run(
+    search_configuration: SearchConfiguration,
+    company_allowlist: CompanyAllowlist,
+    *,
+    adapter_factory: AdapterFactory,
+    repository: JobStateRepository,
+) -> MonitoringRunResult:
+    """Fetch, assess, group, and persist only successful source snapshots."""
+    return await _run_monitor(
+        search_configuration,
+        company_allowlist,
+        adapter_factory=adapter_factory,
+        repository=repository,
+        persist=True,
+    )
+
+
+async def _run_monitor(
+    search_configuration: SearchConfiguration,
+    company_allowlist: CompanyAllowlist,
+    *,
+    adapter_factory: AdapterFactory,
+    repository: JobStateRepository | None,
+    persist: bool,
+) -> MonitoringRunResult:
     adapters = tuple(
         adapter_factory(company) for company in company_allowlist.companies if company.enabled
     )
     source_results = await run_adapters(adapters)
+    successful_results = tuple(
+        result for result in source_results if isinstance(result, SourceRunSuccess)
+    )
     classifier = RoleClassifier(
         search_configuration.role_preferences,
         search_configuration.profile.skill_signals,
     )
     scoring_engine = ScoringEngine()
-    assessments: list[JobAssessment] = []
+    assessments = tuple(
+        _assess_listing(listing, search_configuration, classifier, scoring_engine)
+        for source_result in successful_results
+        for listing in source_result.listings
+    )
+    opportunity_groups = OpportunityGrouper().group(
+        tuple(assessment.job for assessment in assessments)
+    )
 
-    for source_result in source_results:
-        if not isinstance(source_result, SourceRunSuccess):
-            continue
-        for listing in source_result.listings:
-            location = assess_location(listing, search_configuration.regional_strategy)
-            assessments.append(
-                scoring_engine.assess(
-                    listing,
-                    role=classifier.classify(listing),
-                    location=location,
-                    graduation=assess_graduation(listing, search_configuration.profile),
-                    authorization=assess_authorization(
-                        listing,
-                        search_configuration.authorization,
-                        location,
-                    ),
-                    language=assess_language(listing, search_configuration.language_profile),
-                )
-            )
+    observations = tuple(
+        observation
+        for source_result in successful_results
+        for observation in _observe_successful_source(
+            source_result,
+            repository=repository,
+            persist=persist,
+        )
+    )
 
-    return DryRunResult(source_results=source_results, assessments=tuple(assessments))
+    return MonitoringRunResult(
+        source_results=source_results,
+        assessments=assessments,
+        observations=observations,
+        opportunity_groups=opportunity_groups,
+    )
+
+
+def _assess_listing(
+    listing: JobListing,
+    search_configuration: SearchConfiguration,
+    classifier: RoleClassifier,
+    scoring_engine: ScoringEngine,
+) -> JobAssessment:
+    location = assess_location(listing, search_configuration.regional_strategy)
+    return scoring_engine.assess(
+        listing,
+        role=classifier.classify(listing),
+        location=location,
+        graduation=assess_graduation(listing, search_configuration.profile),
+        authorization=assess_authorization(
+            listing,
+            search_configuration.authorization,
+            location,
+        ),
+        language=assess_language(listing, search_configuration.language_profile),
+    )
+
+
+def _observe_successful_source(
+    source_result: SourceRunSuccess,
+    *,
+    repository: JobStateRepository | None,
+    persist: bool,
+) -> tuple[ListingObservation, ...]:
+    if repository is None:
+        return tuple(
+            ListingObservation(listing=listing, change=ListingChange.NEW)
+            for listing in source_result.listings
+        )
+    if persist:
+        return repository.record_successful_source_run(
+            source_result.listings,
+            source_type=source_result.source_type,
+            company=source_result.company,
+        )
+    return repository.compare_successful_source_run(
+        source_result.listings,
+        source_type=source_result.source_type,
+        company=source_result.company,
+    )
 
 
 async def run_configured_dry_run(
     search_configuration: SearchConfiguration,
     company_allowlist: CompanyAllowlist,
-) -> DryRunResult:
-    """Run enabled known sources with a short-lived HTTP client and no side effects."""
+    *,
+    repository: JobStateRepository | None = None,
+) -> MonitoringRunResult:
+    """Run configured sources and compare state without writing it."""
+    return await _run_configured(
+        search_configuration,
+        company_allowlist,
+        repository=repository,
+        persist=False,
+    )
+
+
+async def run_configured_monitoring_run(
+    search_configuration: SearchConfiguration,
+    company_allowlist: CompanyAllowlist,
+    *,
+    repository: JobStateRepository,
+) -> MonitoringRunResult:
+    """Run configured sources and persist their successful snapshots."""
+    return await _run_configured(
+        search_configuration,
+        company_allowlist,
+        repository=repository,
+        persist=True,
+    )
+
+
+async def _run_configured(
+    search_configuration: SearchConfiguration,
+    company_allowlist: CompanyAllowlist,
+    *,
+    repository: JobStateRepository | None,
+    persist: bool,
+) -> MonitoringRunResult:
     if not any(company.enabled for company in company_allowlist.companies):
-        return await run_dry_run(
+        return await _run_with_factory(
             search_configuration,
             company_allowlist,
             adapter_factory=_UnsupportedSourceAdapter,
+            repository=repository,
+            persist=persist,
         )
 
     async with httpx.AsyncClient(timeout=20.0) as client:
-        return await run_dry_run(
+        return await _run_with_factory(
             search_configuration,
             company_allowlist,
             adapter_factory=lambda company: _adapter_for_company(company, client),
+            repository=repository,
+            persist=persist,
         )
+
+
+async def _run_with_factory(
+    search_configuration: SearchConfiguration,
+    company_allowlist: CompanyAllowlist,
+    *,
+    adapter_factory: AdapterFactory,
+    repository: JobStateRepository | None,
+    persist: bool,
+) -> MonitoringRunResult:
+    if persist:
+        if repository is None:
+            raise ValueError("persisted monitoring runs require a state repository")
+        return await run_persisted_run(
+            search_configuration,
+            company_allowlist,
+            adapter_factory=adapter_factory,
+            repository=repository,
+        )
+    return await run_dry_run(
+        search_configuration,
+        company_allowlist,
+        adapter_factory=adapter_factory,
+        repository=repository,
+    )
 
 
 def _adapter_for_company(company: CompanyConfig, client: httpx.AsyncClient) -> SourceAdapter:

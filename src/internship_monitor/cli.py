@@ -9,7 +9,12 @@ from pathlib import Path
 
 from internship_monitor import __version__
 from internship_monitor.config import load_company_allowlist, load_search_configuration
-from internship_monitor.orchestration import run_configured_dry_run
+from internship_monitor.orchestration import (
+    MonitoringRunResult,
+    run_configured_dry_run,
+    run_configured_monitoring_run,
+)
+from internship_monitor.state import JobStateRepository, ListingChange
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,13 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser = subparsers.add_parser(
         "run",
-        help="Fetch and assess configured sources without sending notifications.",
+        help="Fetch, assess, group, and optionally persist configured sources.",
     )
     run_parser.add_argument(
         "--dry-run",
         action="store_true",
-        required=True,
-        help="Do not write listing state or send notifications.",
+        help="Compare hypothetically without writing state or sending notifications.",
     )
     run_parser.add_argument(
         "--profile",
@@ -47,6 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("config/companies.example.yaml"),
         help="Path to the validated company-allowlist YAML file.",
     )
+    run_parser.add_argument(
+        "--state",
+        type=Path,
+        default=Path("state/jobs.sqlite3"),
+        help="Path to local SQLite listing state.",
+    )
     return parser
 
 
@@ -56,21 +66,52 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "status":
         print(
-            f"Internship Monitor {__version__}: Greenhouse adapter, analysis, scoring, "
-            "state tracking, and dry runs ready"
+            f"Internship Monitor {__version__}: analysis, persisted monitoring, "
+            "and opportunity grouping ready"
         )
         return 0
 
     if args.command == "run":
         search_configuration = load_search_configuration(args.profile)
         company_allowlist = load_company_allowlist(args.companies)
-        result = asyncio.run(run_configured_dry_run(search_configuration, company_allowlist))
-        print(
-            "Dry run complete: "
-            f"{len(result.source_results)} source runs, {result.listing_count} listings, "
-            f"{len(result.assessments)} assessments, {result.source_failure_count} failures. "
-            "No state was written and no notifications were sent."
-        )
+        if args.dry_run:
+            with JobStateRepository(args.state, read_only=True) as repository:
+                result = asyncio.run(
+                    run_configured_dry_run(
+                        search_configuration,
+                        company_allowlist,
+                        repository=repository,
+                    )
+                )
+            print(_run_summary(result, dry_run=True))
+            return 0
+
+        args.state.parent.mkdir(parents=True, exist_ok=True)
+        with JobStateRepository(args.state) as repository:
+            result = asyncio.run(
+                run_configured_monitoring_run(
+                    search_configuration,
+                    company_allowlist,
+                    repository=repository,
+                )
+            )
+        print(_run_summary(result, dry_run=False))
         return 0
 
     return 2
+
+
+def _run_summary(result: MonitoringRunResult, *, dry_run: bool) -> str:
+    mode = "Dry run" if dry_run else "Monitoring run"
+    state_note = "No state was written" if dry_run else "Successful source state was persisted"
+    changes = ", ".join(
+        f"{change.value}={result.change_count(change)}"
+        for change in ListingChange
+        if result.change_count(change)
+    )
+    return (
+        f"{mode} complete: {len(result.source_results)} source runs, "
+        f"{result.listing_count} listings, {result.opportunity_count} opportunities, "
+        f"{len(result.assessments)} assessments, {result.source_failure_count} failures; "
+        f"state changes: {changes or 'none'}. {state_note} and no notifications were sent."
+    )

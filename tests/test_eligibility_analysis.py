@@ -39,6 +39,8 @@ class EligibilityAnalysisTests(TestCase):
 
     def test_taxonomy_is_geographic_and_reusable(self) -> None:
         self.assertEqual(country_from_location("Paris, France"), "France")
+        self.assertEqual(country_from_location("London, UK"), "United Kingdom")
+        self.assertEqual(country_from_location("Dubai, UAE"), "United Arab Emirates")
         self.assertEqual(region_for_country("France"), "EMEA")
         self.assertEqual(region_for_country("Japan"), "APAC")
 

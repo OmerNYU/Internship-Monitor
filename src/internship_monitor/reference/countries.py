@@ -226,7 +226,7 @@ def country_from_location(location: str | None) -> str | None:
     return next(
         country
         for country in (*EMEA_COUNTRIES, *APAC_COUNTRIES, *AMERICAS_COUNTRIES)
-        if _normalize(country) == canonical
+        if _normalize(country) == _normalize(canonical)
     )
 
 
