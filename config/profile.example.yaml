@@ -1,0 +1,88 @@
+# Public example only. Keep personal profile data in config.local/profile.yaml.
+profile:
+  degree_level: bachelors
+  field_of_study: computer_science
+  expected_graduation: 2029-05
+  primary_season: summer_2028
+  additional_seasons: [spring_2028, fall_2028, off_cycle_2028]
+  # Signals are grouped for readability; future matching reads values from configuration.
+  skill_signals:
+    programming: [Python, TypeScript, SQL]
+    engineering: [REST APIs, full-stack development, developer tooling]
+    cloud: [Docker, AWS, Linux, CI/CD]
+    ai_ml: [machine learning, LLM systems, model evaluation]
+    consulting: [data analysis, structured problem solving, technical communication]
+
+role_preferences:
+  primary:
+    - Software Engineering Intern
+    - Backend Engineering Intern
+    - Machine Learning Engineering Intern
+    - AI Engineering Intern
+    - Data Engineering Intern
+  secondary:
+    - Technical Product Intern
+    - AI Product Intern
+  consulting:
+    - Technology Consulting Intern
+    - AI Consulting Intern
+    - Data and Analytics Consulting Intern
+    - Digital Transformation Intern
+  adjacent_requires_description_match:
+    - Technology Analyst
+    - Business Analyst Intern
+  excluded_by_default: [audit, tax, accounting, pure sales, human resources, marketing]
+
+language_profile:
+  spoken_languages: [English]
+  unknown_requirement_policy: requires_verification
+
+
+regional_strategy:
+  # Regions influence relevance and discovery priority, never legal eligibility.
+  primary_regions:
+    - EMEA
+    - APAC
+  discover_other_regions_for_approved_companies: true
+
+  preferred_markets:
+    - country: United Arab Emirates
+      cities: [Dubai, Abu Dhabi]
+      region: EMEA
+      priority: highest
+    - country: United Kingdom
+      cities: [London]
+      region: EMEA
+      priority: high
+    - country: Ireland
+      cities: [Dublin]
+      region: EMEA
+      priority: high
+    - country: Germany
+      cities: [Berlin, Munich]
+      region: EMEA
+      priority: high
+    - country: Portugal
+      cities: [Lisbon]
+      region: EMEA
+      priority: high
+    - country: Qatar
+      cities: [Doha]
+      region: EMEA
+      priority: high
+    - country: Singapore
+      cities: [Singapore]
+      region: APAC
+      priority: high
+
+  remote_policy:
+    international_remote_priority: high
+    ambiguous_geography: warn
+    emea_only: warn_and_review_eligibility
+    apac_only: warn_and_review_eligibility
+
+authorization:
+  # Fake example values. Replace privately; do not publish personal authorization details.
+  supported_countries:
+    - Example Country
+  unknown_country_policy: requires_verification

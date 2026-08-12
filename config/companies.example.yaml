@@ -1,0 +1,9 @@
+# Monitoring is allowlist-only. Copy this file into config.local/ and explicitly approve entries.
+companies:
+  - name: Example Company
+    enabled: false
+    source:
+      type: greenhouse
+      board_token: example-company
+    target_regions: [EMEA, APAC]
+
