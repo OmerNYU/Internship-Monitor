@@ -3,6 +3,7 @@
 from internship_monitor.config.loader import (
     ConfigurationError,
     load_company_allowlist,
+    load_notification_configuration,
     load_search_configuration,
 )
 from internship_monitor.config.models import (
@@ -10,7 +11,9 @@ from internship_monitor.config.models import (
     CompanyAllowlist,
     CompanyConfig,
     CompanySourceConfig,
+    EmailNotificationConfig,
     LanguageProfile,
+    NotificationConfiguration,
     PreferredMarket,
     Priority,
     RegionalStrategy,
@@ -18,6 +21,7 @@ from internship_monitor.config.models import (
     RolePreferences,
     SearchConfiguration,
     SearchProfile,
+    WhatsAppNotificationConfig,
 )
 
 __all__ = [
@@ -26,7 +30,9 @@ __all__ = [
     "CompanyConfig",
     "CompanySourceConfig",
     "ConfigurationError",
+    "EmailNotificationConfig",
     "LanguageProfile",
+    "NotificationConfiguration",
     "PreferredMarket",
     "Priority",
     "RegionalStrategy",
@@ -34,6 +40,8 @@ __all__ = [
     "RolePreferences",
     "SearchConfiguration",
     "SearchProfile",
+    "WhatsAppNotificationConfig",
     "load_company_allowlist",
+    "load_notification_configuration",
     "load_search_configuration",
 ]

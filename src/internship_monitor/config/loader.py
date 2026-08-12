@@ -7,7 +7,11 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from internship_monitor.config.models import CompanyAllowlist, SearchConfiguration
+from internship_monitor.config.models import (
+    CompanyAllowlist,
+    NotificationConfiguration,
+    SearchConfiguration,
+)
 
 
 class ConfigurationError(ValueError):
@@ -51,3 +55,8 @@ def load_search_configuration(path: str | Path) -> SearchConfiguration:
 def load_company_allowlist(path: str | Path) -> CompanyAllowlist:
     """Load and validate an explicit company allowlist YAML file."""
     return _load_yaml(Path(path), CompanyAllowlist)
+
+
+def load_notification_configuration(path: str | Path) -> NotificationConfiguration:
+    """Load and validate notifier settings without exposing credentials in YAML."""
+    return _load_yaml(Path(path), NotificationConfiguration)

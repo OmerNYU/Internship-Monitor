@@ -17,7 +17,7 @@ class CliTests(TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertIn(__version__, output.getvalue())
-        self.assertIn("alert decisions ready", output.getvalue())
+        self.assertIn("optional WhatsApp delivery ready", output.getvalue())
 
     def test_dry_run_does_not_create_or_change_state(self) -> None:
         with TemporaryDirectory() as directory:
@@ -31,6 +31,24 @@ class CliTests(TestCase):
             self.assertIn("0 listings", output.getvalue())
             self.assertIn("0 opportunities", output.getvalue())
             self.assertIn("No state was written", output.getvalue())
+            self.assertFalse(state_path.exists())
+
+    def test_dry_run_can_preview_notifications_without_external_delivery(self) -> None:
+        with TemporaryDirectory() as directory:
+            state_path = Path(directory) / "state" / "jobs.sqlite3"
+            output = StringIO()
+
+            with redirect_stdout(output):
+                exit_code = main(
+                    ["run", "--dry-run", "--preview-notifications", "--state", str(state_path)]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn(
+                "Console preview complete: 0 notifications rendered locally",
+                output.getvalue(),
+            )
+            self.assertIn("External delivery remains disabled", output.getvalue())
             self.assertFalse(state_path.exists())
 
     def test_monitoring_run_creates_state_without_notifications(self) -> None:

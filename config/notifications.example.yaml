@@ -1,0 +1,19 @@
+# Public example only. Keep personal addresses and local settings in config.local/.
+console_enabled: true
+email:
+  enabled: false
+  sender: internship-monitor-sender@example.com
+  recipient: personal-recipient@example.com
+  smtp_host: smtp.gmail.com
+  smtp_port: 587
+  # The password belongs in the environment, never in YAML or source control.
+  password_env_var: INTERNSHIP_MONITOR_EMAIL_PASSWORD
+
+# Optional secondary channel. All Twilio IDs, tokens, and phone numbers stay in the environment.
+whatsapp:
+  enabled: false
+  api_base_url: https://api.twilio.com
+  account_sid_env_var: TWILIO_ACCOUNT_SID
+  auth_token_env_var: TWILIO_AUTH_TOKEN
+  sender_env_var: TWILIO_WHATSAPP_FROM
+  recipient_env_var: TWILIO_WHATSAPP_TO

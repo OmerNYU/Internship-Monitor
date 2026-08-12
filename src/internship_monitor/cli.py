@@ -9,6 +9,11 @@ from pathlib import Path
 
 from internship_monitor import __version__
 from internship_monitor.config import load_company_allowlist, load_search_configuration
+from internship_monitor.notifications import (
+    ConsoleNotifier,
+    NotificationDispatcher,
+    notification_from_decision,
+)
 from internship_monitor.orchestration import (
     MonitoringRunResult,
     run_configured_dry_run,
@@ -57,6 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("state/jobs.sqlite3"),
         help="Path to local SQLite listing state.",
     )
+    run_parser.add_argument(
+        "--preview-notifications",
+        action="store_true",
+        help="Render policy-approved notifications locally; never sends externally.",
+    )
     return parser
 
 
@@ -67,7 +77,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "status":
         print(
             f"Internship Monitor {__version__}: analysis, persisted monitoring, "
-            "and alert decisions ready"
+            "alert decisions, local delivery previews, and optional WhatsApp delivery ready"
         )
         return 0
 
@@ -84,6 +94,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 )
             print(_run_summary(result, dry_run=True))
+            if args.preview_notifications:
+                print(_notification_preview_summary(result))
             return 0
 
         args.state.parent.mkdir(parents=True, exist_ok=True)
@@ -96,6 +108,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         print(_run_summary(result, dry_run=False))
+        if args.preview_notifications:
+            print(_notification_preview_summary(result))
         return 0
 
     return 2
@@ -115,4 +129,22 @@ def _run_summary(result: MonitoringRunResult, *, dry_run: bool) -> str:
         f"{len(result.alert_decisions)} alert decisions, "
         f"{len(result.assessments)} assessments, {result.source_failure_count} failures; "
         f"state changes: {changes or 'none'}. {state_note} and no notifications were sent."
+    )
+
+
+def _notification_preview_summary(result: MonitoringRunResult) -> str:
+    notifications = tuple(
+        notification
+        for decision in result.alert_decisions
+        if (notification := notification_from_decision(decision)) is not None
+    )
+    dispatcher = NotificationDispatcher()
+    reports = tuple(
+        asyncio.run(dispatcher.deliver(notification, (ConsoleNotifier(),)))
+        for notification in notifications
+    )
+    delivered = sum(report.delivered for report in reports)
+    return (
+        f"Console preview complete: {delivered} notifications rendered locally. "
+        "External delivery remains disabled."
     )

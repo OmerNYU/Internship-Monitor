@@ -195,3 +195,45 @@ class CompanyAllowlist(StrictConfigModel):
         if duplicates:
             raise ValueError(f"company names must be unique: {', '.join(duplicates)}")
         return self
+
+
+class EmailNotificationConfig(StrictConfigModel):
+    """SMTP email settings; credentials are read only from the environment."""
+
+    enabled: bool = False
+    sender: NonEmptyString | None = None
+    recipient: NonEmptyString | None = None
+    smtp_host: NonEmptyString = "smtp.gmail.com"
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    password_env_var: NonEmptyString = "INTERNSHIP_MONITOR_EMAIL_PASSWORD"
+
+    @model_validator(mode="after")
+    def require_addresses_when_enabled(self) -> Self:
+        if self.enabled and (self.sender is None or self.recipient is None):
+            raise ValueError("sender and recipient are required when email is enabled")
+        return self
+
+
+class WhatsAppNotificationConfig(StrictConfigModel):
+    """Twilio WhatsApp settings; identifiers and phone numbers remain in the environment."""
+
+    enabled: bool = False
+    api_base_url: NonEmptyString = "https://api.twilio.com"
+    account_sid_env_var: NonEmptyString = "TWILIO_ACCOUNT_SID"
+    auth_token_env_var: NonEmptyString = "TWILIO_AUTH_TOKEN"
+    sender_env_var: NonEmptyString = "TWILIO_WHATSAPP_FROM"
+    recipient_env_var: NonEmptyString = "TWILIO_WHATSAPP_TO"
+
+    @model_validator(mode="after")
+    def require_secure_api_endpoint(self) -> Self:
+        if not self.api_base_url.startswith("https://"):
+            raise ValueError("WhatsApp API base URL must use HTTPS")
+        return self
+
+
+class NotificationConfiguration(StrictConfigModel):
+    """Provider-neutral settings, intentionally separate from search data."""
+
+    console_enabled: bool = True
+    email: EmailNotificationConfig = Field(default_factory=EmailNotificationConfig)
+    whatsapp: WhatsAppNotificationConfig = Field(default_factory=WhatsAppNotificationConfig)
