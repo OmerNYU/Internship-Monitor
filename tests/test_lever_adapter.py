@@ -194,6 +194,7 @@ class LeverAdapterTests(TestCase):
 
     def test_uses_the_documented_postings_url_template(self) -> None:
         self.assertEqual(LEVER_POSTINGS_URL, "https://api.lever.co/v0/postings/{site}")
+
     def test_configured_lever_source_uses_the_lever_adapter(self) -> None:
         async def select_adapter() -> object:
             async with httpx.AsyncClient() as client:
