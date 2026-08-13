@@ -65,3 +65,12 @@ class SystemStatus:
     notifications: NotificationQueueCounts | None
     last_monitor_run: MonitorRunSummary | None
     last_delivery_run: DeliveryRunSummary | None
+
+
+@dataclass(frozen=True, slots=True)
+class GeographicBucketSummary:
+    """Deterministic geographic grouping for CLI previews and future digests."""
+
+    bucket: str
+    countries: tuple[str, ...]
+    opportunity_count: int

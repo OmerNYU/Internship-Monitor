@@ -2,6 +2,7 @@
 
 from internship_monitor.reporting.models import (
     DeliveryRunSummary,
+    GeographicBucketSummary,
     ListingStateCounts,
     MonitorRunSummary,
     NotificationQueueCounts,
@@ -10,6 +11,7 @@ from internship_monitor.reporting.models import (
 
 __all__ = [
     "DeliveryRunSummary",
+    "GeographicBucketSummary",
     "ListingStateCounts",
     "MonitorRunSummary",
     "NotificationQueueCounts",

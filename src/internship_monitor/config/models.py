@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from typing import Annotated, Self
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -105,6 +106,7 @@ class RegionalStrategy(StrictConfigModel):
     primary_regions: tuple[NonEmptyString, ...] = Field(min_length=1)
     discover_other_regions_for_approved_companies: bool = True
     preferred_markets: tuple[PreferredMarket, ...] = ()
+    hard_excluded_countries: tuple[NonEmptyString, ...] = ()
     remote_policy: RemotePolicy
 
     @model_validator(mode="after")
@@ -118,6 +120,11 @@ class RegionalStrategy(StrictConfigModel):
         if duplicate_markets:
             raise ValueError(
                 f"preferred market countries must be unique: {', '.join(duplicate_markets)}"
+            )
+        duplicate_exclusions = _duplicates(self.hard_excluded_countries)
+        if duplicate_exclusions:
+            raise ValueError(
+                f"hard excluded countries must be unique: {', '.join(duplicate_exclusions)}"
             )
         return self
 
@@ -150,6 +157,72 @@ class LanguageProfile(StrictConfigModel):
         return self
 
 
+class IntelligenceProviderKind(StrEnum):
+    """Configured optional intelligence provider; core analysis never invokes it."""
+
+    OLLAMA = "ollama"
+
+
+class OllamaConfiguration(StrictConfigModel):
+    """Local Ollama settings used only by explicit intelligence diagnostics/evaluation."""
+
+    base_url: NonEmptyString = "http://127.0.0.1:11434"
+    health_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
+    inference_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+
+    @model_validator(mode="after")
+    def require_local_http_endpoint(self) -> Self:
+        parsed = urlparse(self.base_url)
+        if (
+            parsed.scheme != "http"
+            or parsed.hostname not in {"127.0.0.1", "::1", "localhost"}
+            or parsed.path not in {"", "/"}
+            or parsed.params
+            or parsed.query
+            or parsed.fragment
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
+            raise ValueError("base_url must be a local HTTP origin without a path or credentials")
+        return self
+
+
+class EmbeddingConfiguration(StrictConfigModel):
+    """Conservative local embedding-ranker settings for explicit evaluation only."""
+
+    model: NonEmptyString = "qwen3-embedding:0.6b"
+    review_similarity: float = Field(default=0.62, ge=0, le=1)
+    relevant_similarity: float = Field(default=0.78, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def require_ordered_promotion_thresholds(self) -> Self:
+        if self.relevant_similarity < self.review_similarity:
+            raise ValueError(
+                "relevant_similarity must be greater than or equal to review_similarity"
+            )
+        return self
+
+
+class StructuredAssessmentConfiguration(StrictConfigModel):
+    """Bounded local structured-assessment settings for explicit evaluation only."""
+
+    model: NonEmptyString = "qwen3:4b"
+    minimum_confidence: float = Field(default=0.70, ge=0, le=1)
+    max_description_characters: int = Field(default=12_000, ge=500, le=50_000)
+
+
+class IntelligenceConfiguration(StrictConfigModel):
+    """Optional local intelligence boundary, separate from deterministic assessment policy."""
+
+    enabled: bool = False
+    provider: IntelligenceProviderKind = IntelligenceProviderKind.OLLAMA
+    ollama: OllamaConfiguration = Field(default_factory=OllamaConfiguration)
+    embedding: EmbeddingConfiguration = Field(default_factory=EmbeddingConfiguration)
+    structured_assessment: StructuredAssessmentConfiguration = Field(
+        default_factory=StructuredAssessmentConfiguration
+    )
+
+
 class SearchConfiguration(StrictConfigModel):
     """Complete per-user search configuration."""
 
@@ -158,6 +231,7 @@ class SearchConfiguration(StrictConfigModel):
     regional_strategy: RegionalStrategy
     authorization: AuthorizationConfig
     language_profile: LanguageProfile = Field(default_factory=LanguageProfile)
+    intelligence: IntelligenceConfiguration = Field(default_factory=IntelligenceConfiguration)
 
 
 class CompanySourceConfig(StrictConfigModel):

@@ -69,6 +69,39 @@ class GreenhouseAdapterTests(TestCase):
         self.assertIsNone(listing.posted_at)
         self.assertEqual(listing.discovered_at, datetime(2026, 8, 12, 12, tzinfo=UTC))
 
+    def test_uses_structured_office_geography_when_location_is_only_modality(self) -> None:
+        async def fetch() -> tuple[JobListing, ...]:
+            transport = httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    json={
+                        "jobs": [
+                            {
+                                "id": "office-location",
+                                "title": "Software Engineering Intern",
+                                "content": "<p>Build systems.</p>",
+                                "absolute_url": "https://boards.greenhouse.io/example/jobs/office",
+                                "location": {"name": "In-Office"},
+                                "offices": [
+                                    {
+                                        "id": 1,
+                                        "name": "London Office",
+                                        "location": "London, United Kingdom",
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                )
+            )
+            async with httpx.AsyncClient(transport=transport) as client:
+                return await GreenhouseAdapter(greenhouse_company(), client).fetch()
+
+        listing = asyncio.run(fetch())[0]
+
+        self.assertEqual(listing.location, "London, United Kingdom")
+        self.assertEqual(listing.workplace_type, "in_office")
+
     def test_preserves_missing_location_as_unknown(self) -> None:
         async def fetch() -> tuple[JobListing, ...]:
             transport = httpx.MockTransport(

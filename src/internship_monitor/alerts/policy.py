@@ -11,7 +11,7 @@ from internship_monitor.alerts.models import (
     AlertUrgency,
     OpportunityState,
 )
-from internship_monitor.analysis import JobAssessment, Recommendation, RoleMatchLevel
+from internship_monitor.analysis import HardBlockerKind, JobAssessment, Recommendation
 from internship_monitor.opportunities import OpportunityGroup
 from internship_monitor.state import ListingChange, ListingObservation
 
@@ -37,7 +37,17 @@ class AlertPolicy:
         group_observations = _observations_for_opportunity(opportunity, observations)
         assessment = _best_assessment(opportunity, assessments)
         opportunity_state = _opportunity_state(group_observations)
-        if assessment.role.level is RoleMatchLevel.NOT_RELEVANT:
+        suppressing_blockers = tuple(
+            blocker
+            for blocker in assessment.hard_blockers
+            if blocker.kind
+            in {
+                HardBlockerKind.HARD_EXCLUDED_LOCATION,
+                HardBlockerKind.INCOMPATIBLE_SEASON,
+                HardBlockerKind.CLEARLY_NON_STUDENT_ROLE,
+            }
+        )
+        if suppressing_blockers:
             return _decision(
                 opportunity,
                 assessment,
@@ -46,7 +56,7 @@ class AlertPolicy:
                 AlertAction.SUPPRESS,
                 AlertUrgency.NONE,
                 None,
-                ("Opportunity is outside configured role relevance.",),
+                tuple(blocker.reason for blocker in suppressing_blockers),
             )
         if opportunity_state is OpportunityState.UNCHANGED:
             return _decision(

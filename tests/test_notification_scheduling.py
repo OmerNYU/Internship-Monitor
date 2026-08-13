@@ -19,6 +19,8 @@ from internship_monitor.analysis import (
     Recommendation,
     RoleAssessment,
     RoleMatchLevel,
+    SeasonAssessment,
+    SeasonStatus,
 )
 from internship_monitor.models import JobListing
 from internship_monitor.notifications import (
@@ -83,6 +85,11 @@ def decision(
         authorization=AuthorizationAssessment(
             status=AuthorizationStatus.AUTHORIZED,
             reasons=("Authorized.",),
+        ),
+        season=SeasonAssessment(
+            status=SeasonStatus.UNKNOWN,
+            identified_seasons=(),
+            reasons=("No explicit season.",),
         ),
         language=LanguageAssessment(
             status=LanguageStatus.COMPATIBLE,

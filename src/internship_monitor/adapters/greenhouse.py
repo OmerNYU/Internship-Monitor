@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from html import unescape
 from html.parser import HTMLParser
@@ -14,6 +14,11 @@ from internship_monitor.config import CompanyConfig
 from internship_monitor.models import JobListing
 
 GREENHOUSE_JOBS_URL = "https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs"
+_MODALITY_BY_LOCATION_NAME = {
+    "hybrid": "hybrid",
+    "in office": "in_office",
+    "remote": "remote",
+}
 
 
 class GreenhouseAdapterError(ValueError):
@@ -31,6 +36,7 @@ class _TextExtractor(HTMLParser):
         self.parts.append(data)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
         if tag in {"br", "li", "p", "div", "h1", "h2", "h3", "h4", "h5", "h6"}:
             self.parts.append(" ")
 
@@ -52,6 +58,14 @@ def _required_text(value: object, field: str) -> str:
     return value.strip()
 
 
+def _optional_text(value: object) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _normalized(value: str) -> str:
+    return " ".join(value.casefold().replace("-", " ").split())
+
+
 def _job_id(value: object) -> str:
     if isinstance(value, bool) or value is None:
         raise GreenhouseAdapterError("Greenhouse job is missing a usable id.")
@@ -61,13 +75,39 @@ def _job_id(value: object) -> str:
     return job_id
 
 
-def _optional_location(value: object) -> str | None:
-    if not isinstance(value, Mapping):
+def _location_name(raw_job: Mapping[str, object]) -> str | None:
+    location = raw_job.get("location")
+    return _optional_text(location.get("name")) if isinstance(location, Mapping) else None
+
+
+def _office_locations(raw_job: Mapping[str, object]) -> tuple[str, ...]:
+    offices = raw_job.get("offices")
+    if not isinstance(offices, Sequence) or isinstance(offices, str):
+        return ()
+    locations: list[str] = []
+    for office in offices:
+        if not isinstance(office, Mapping):
+            continue
+        location = _optional_text(office.get("location"))
+        if location is not None and location not in locations:
+            locations.append(location)
+    return tuple(locations)
+
+
+def _location(raw_job: Mapping[str, object]) -> str | None:
+    """Prefer structured office geography over a generic modality label."""
+    offices = _office_locations(raw_job)
+    if offices:
+        return " | ".join(offices)
+    location_name = _location_name(raw_job)
+    if location_name is None or _normalized(location_name) in _MODALITY_BY_LOCATION_NAME:
         return None
-    name = value.get("name")
-    if not isinstance(name, str) or not name.strip():
-        return None
-    return name.strip()
+    return location_name
+
+
+def _workplace_type(raw_job: Mapping[str, object]) -> str | None:
+    location_name = _location_name(raw_job)
+    return _MODALITY_BY_LOCATION_NAME.get(_normalized(location_name)) if location_name else None
 
 
 def _description_as_text(value: object) -> str:
@@ -134,6 +174,7 @@ class GreenhouseAdapter:
             title=_required_text(raw_job.get("title"), "title"),
             description=_description_as_text(raw_job.get("content")),
             apply_url=_required_text(raw_job.get("absolute_url"), "absolute_url"),
-            location=_optional_location(raw_job.get("location")),
+            location=_location(raw_job),
+            workplace_type=_workplace_type(raw_job),
             discovered_at=discovered_at,
         )

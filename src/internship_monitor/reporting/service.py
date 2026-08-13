@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from internship_monitor.orchestration import MonitoringRunResult
-from internship_monitor.reporting.models import DeliveryRunSummary, MonitorRunSummary
+from internship_monitor.analysis import GeographicBucket, JobAssessment
+from internship_monitor.reporting.models import (
+    DeliveryRunSummary,
+    GeographicBucketSummary,
+    MonitorRunSummary,
+)
 from internship_monitor.state import ListingChange
 
 
@@ -52,3 +57,37 @@ def delivery_run_summary(
         retries_pending=retries_pending,
         terminal_failures=terminal_failures,
     )
+
+
+_BUCKET_ORDER = {bucket: index for index, bucket in enumerate(GeographicBucket)}
+
+
+def geographic_bucket_summary(
+    assessments: tuple[JobAssessment, ...],
+) -> tuple[GeographicBucketSummary, ...]:
+    """Group completed assessments by routing bucket without parsing presentation text."""
+    grouped: dict[GeographicBucket, list[JobAssessment]] = {}
+    for assessment in assessments:
+        grouped.setdefault(assessment.location.geographic_bucket, []).append(assessment)
+
+    summaries: list[GeographicBucketSummary] = []
+    for bucket in sorted(grouped, key=lambda item: _BUCKET_ORDER[item]):
+        countries = tuple(
+            sorted(
+                {
+                    candidate.country
+                    for assessment in grouped[bucket]
+                    for candidate in assessment.location.candidates
+                    if candidate.country is not None
+                    and (bucket is GeographicBucket.BLOCKED or not candidate.is_hard_excluded)
+                }
+            )
+        )
+        summaries.append(
+            GeographicBucketSummary(
+                bucket=bucket.value,
+                countries=countries,
+                opportunity_count=len(grouped[bucket]),
+            )
+        )
+    return tuple(summaries)

@@ -4,16 +4,31 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
 from internship_monitor import __version__
+from internship_monitor.analysis import AssessmentProvider, DeterministicAssessor
 from internship_monitor.config import (
     NotificationConfiguration,
     load_company_allowlist,
     load_notification_configuration,
     load_search_configuration,
+)
+from internship_monitor.evaluation import (
+    GoldDatasetError,
+    evaluate_gold_cases,
+    format_evaluation_report,
+    load_gold_cases,
+    report_as_dict,
+)
+from internship_monitor.intelligence import (
+    EmbeddingAssessmentProvider,
+    ProviderHealthStatus,
+    StructuredLLMAssessmentProvider,
+    provider_from_configuration,
 )
 from internship_monitor.notifications import (
     ConsoleNotifier,
@@ -31,7 +46,11 @@ from internship_monitor.orchestration import (
     run_configured_monitoring_run,
 )
 from internship_monitor.reporting.models import SystemStatus
-from internship_monitor.reporting.service import delivery_run_summary, monitor_run_summary
+from internship_monitor.reporting.service import (
+    delivery_run_summary,
+    geographic_bucket_summary,
+    monitor_run_summary,
+)
 from internship_monitor.reporting.status import system_status
 from internship_monitor.state import JobStateRepository, ListingChange
 
@@ -107,6 +126,56 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to local queued-notification state.",
     )
 
+    evaluate_parser = subparsers.add_parser(
+        "evaluate",
+        help="Run an offline gold-dataset benchmark without discovery, state, or delivery.",
+    )
+    evaluate_parser.add_argument(
+        "--dataset",
+        type=Path,
+        required=True,
+        help="Path to a version-1 JSONL gold dataset.",
+    )
+    evaluate_parser.add_argument(
+        "--profile",
+        type=Path,
+        default=Path("config/profile.example.yaml"),
+        help="Path to the validated search-profile YAML file.",
+    )
+    evaluate_parser.add_argument(
+        "--provider",
+        choices=("deterministic", "embedding", "llm"),
+        default="deterministic",
+        help="Assessment provider to compare; intelligence providers are evaluation-only.",
+    )
+    evaluate_parser.add_argument(
+        "--embedding-cache",
+        type=Path,
+        default=Path("state/embeddings.sqlite3"),
+        help="Ignored local SQLite cache used only by embedding evaluation.",
+    )
+    evaluate_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Render the structured diagnostic report as JSON.",
+    )
+    intelligence_parser = subparsers.add_parser(
+        "intelligence-status",
+        help="Check the configured optional local intelligence provider without inference.",
+    )
+    intelligence_parser.add_argument(
+        "--profile",
+        type=Path,
+        default=Path("config/profile.example.yaml"),
+        help="Path to the validated search-profile YAML file.",
+    )
+    intelligence_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Render the local health result as JSON.",
+    )
     deliver_parser = subparsers.add_parser(
         "deliver",
         help="Process due queued notifications; it never performs discovery or analysis.",
@@ -135,6 +204,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the command-line application."""
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "intelligence-status":
+        return _intelligence_status_command(args)
+    if args.command == "evaluate":
+        return _evaluate_command(args, parser)
 
     if args.command == "status":
         print(_status_summary(system_status(args.state, args.notification_state)))
@@ -206,6 +280,61 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 2
 
 
+def _intelligence_status_command(args: argparse.Namespace) -> int:
+    configuration = load_search_configuration(args.profile)
+    health = provider_from_configuration(configuration.intelligence).health()
+    if args.json_output:
+        print(
+            json.dumps(
+                {
+                    "provider": health.provider,
+                    "status": health.status.value,
+                    "detail": health.detail,
+                    "version": health.version,
+                    "installed_models": health.installed_models,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    else:
+        models = ", ".join(health.installed_models) or "none"
+        version = health.version or "unknown"
+        print(
+            f"Intelligence status: provider={health.provider}, status={health.status.value}, "
+            f"version={version}, models={models}. {health.detail}"
+        )
+    return 1 if health.status is ProviderHealthStatus.UNAVAILABLE else 0
+
+
+def _evaluate_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    try:
+        cases = load_gold_cases(args.dataset)
+    except GoldDatasetError as error:
+        parser.error(str(error))
+    configuration = load_search_configuration(args.profile)
+    baseline = DeterministicAssessor(configuration)
+    provider: AssessmentProvider = baseline
+    if args.provider in {"embedding", "llm"}:
+        embedding_provider = EmbeddingAssessmentProvider(
+            configuration,
+            baseline=baseline,
+            cache_path=args.embedding_cache,
+        )
+        provider = embedding_provider
+        if args.provider == "llm":
+            provider = StructuredLLMAssessmentProvider(
+                configuration,
+                baseline=embedding_provider,
+            )
+    report = evaluate_gold_cases(cases, provider)
+    if args.json_output:
+        print(json.dumps(report_as_dict(report), indent=2, sort_keys=True))
+    else:
+        print(format_evaluation_report(report))
+    return 0
+
+
 def _run_summary(result: MonitoringRunResult, *, dry_run: bool) -> str:
     mode = "Dry run" if dry_run else "Monitoring run"
     state_note = "No state was written" if dry_run else "Successful source state was persisted"
@@ -214,11 +343,17 @@ def _run_summary(result: MonitoringRunResult, *, dry_run: bool) -> str:
         for change in ListingChange
         if result.change_count(change)
     )
+    geographic_routing = ", ".join(
+        f"{summary.bucket}={summary.opportunity_count}"
+        + (f" ({', '.join(summary.countries)})" if summary.countries else "")
+        for summary in geographic_bucket_summary(result.assessments)
+    )
     return (
         f"{mode} complete: {len(result.source_results)} source runs, "
         f"{result.listing_count} listings, {result.opportunity_count} opportunities, "
         f"{len(result.alert_decisions)} alert decisions, "
         f"{len(result.assessments)} assessments, {result.source_failure_count} failures; "
+        f"geographic routing: {geographic_routing or 'none'}; "
         f"state changes: {changes or 'none'}. {state_note} and no notifications were sent."
     )
 

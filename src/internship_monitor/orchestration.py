@@ -17,15 +17,7 @@ from internship_monitor.adapters import (
     run_adapters,
 )
 from internship_monitor.alerts import AlertDecision, AlertPolicy
-from internship_monitor.analysis import (
-    JobAssessment,
-    RoleClassifier,
-    ScoringEngine,
-    assess_authorization,
-    assess_graduation,
-    assess_language,
-    assess_location,
-)
+from internship_monitor.analysis import DeterministicAssessor, JobAssessment
 from internship_monitor.config import CompanyAllowlist, CompanyConfig, SearchConfiguration
 from internship_monitor.models import JobListing
 from internship_monitor.opportunities import OpportunityGroup, OpportunityGrouper
@@ -134,13 +126,9 @@ async def _run_monitor(
     successful_results = tuple(
         result for result in source_results if isinstance(result, SourceRunSuccess)
     )
-    classifier = RoleClassifier(
-        search_configuration.role_preferences,
-        search_configuration.profile.skill_signals,
-    )
-    scoring_engine = ScoringEngine()
+    assessor = DeterministicAssessor(search_configuration)
     assessments = tuple(
-        _assess_listing(listing, search_configuration, classifier, scoring_engine)
+        assessor.assess(listing)
         for source_result in successful_results
         for listing in source_result.listings
     )
@@ -170,27 +158,6 @@ async def _run_monitor(
         observations=observations,
         opportunity_groups=opportunity_groups,
         alert_decisions=alert_decisions,
-    )
-
-
-def _assess_listing(
-    listing: JobListing,
-    search_configuration: SearchConfiguration,
-    classifier: RoleClassifier,
-    scoring_engine: ScoringEngine,
-) -> JobAssessment:
-    location = assess_location(listing, search_configuration.regional_strategy)
-    return scoring_engine.assess(
-        listing,
-        role=classifier.classify(listing),
-        location=location,
-        graduation=assess_graduation(listing, search_configuration.profile),
-        authorization=assess_authorization(
-            listing,
-            search_configuration.authorization,
-            location,
-        ),
-        language=assess_language(listing, search_configuration.language_profile),
     )
 
 

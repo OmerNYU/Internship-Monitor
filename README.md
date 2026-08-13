@@ -8,7 +8,7 @@ never substitutes for evidence about work authorisation or language requirements
 
 ## Project status
 
-Sessions 1 through 19 are implemented. The project has a canonical job model, strict public/private
+Sessions 1 through 24 are implemented. The project has a canonical job model, strict public/private
 configuration, failure-isolated async source adapters, Greenhouse and Lever adapters, deterministic role
 and eligibility assessment, country/region preferences, durable listing transitions, grouping,
 alert policy, notification queueing with retries and daily-digest support, and structured
@@ -94,6 +94,8 @@ source adapters -> canonical listings -> deterministic analysis -> alert decisio
 Source adapters do not depend on analysis, scoring, persistence, or notification providers.
 Operational status is derived from typed, persisted summary models rather than CLI text.
 
-See [`docs/architecture.md`](docs/architecture.md) and
-[`docs/decisions/001-emea-apac-priority.md`](docs/decisions/001-emea-apac-priority.md) for the
-foundational architecture and regional amendment.
+See [`docs/architecture.md`](docs/architecture.md),
+[`docs/decisions/001-emea-apac-priority.md`](docs/decisions/001-emea-apac-priority.md),
+[`docs/evaluation_harness_v0.1.md`](docs/evaluation_harness_v0.1.md), and
+[`docs/intelligence_provider_v0.1.md`](docs/intelligence_provider_v0.1.md) for architecture,
+regional, evaluation, and optional-local-provider guidance.

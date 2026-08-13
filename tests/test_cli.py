@@ -39,6 +39,7 @@ class CliTests(TestCase):
             self.assertIn("0 listings", output.getvalue())
             self.assertIn("0 opportunities", output.getvalue())
             self.assertIn("No state was written", output.getvalue())
+            self.assertIn("geographic routing: none", output.getvalue())
             self.assertFalse(state_path.exists())
 
     def test_dry_run_can_preview_notifications_without_external_delivery(self) -> None:
