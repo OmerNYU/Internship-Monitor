@@ -43,6 +43,8 @@ class CaseEvaluation:
     semantic_provider: str | None = None
     semantic_status: str | None = None
     semantic_fallback_reason: str | None = None
+    agent_tool_calls: tuple[str, ...] = ()
+    agent_tool_call_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +193,20 @@ def evaluate_gold_cases(
                 semantic_status=assessment.semantic.status.value if assessment.semantic else None,
                 semantic_fallback_reason=(
                     assessment.semantic.fallback_reason if assessment.semantic else None
+                ),
+                agent_tool_calls=(
+                    tuple(
+                        evidence.text
+                        for evidence in assessment.semantic.evidence
+                        if evidence.label == "agent_tool" and evidence.text is not None
+                    )
+                    if assessment.semantic and assessment.semantic.provider == "agent"
+                    else ()
+                ),
+                agent_tool_call_count=(
+                    sum(evidence.label == "agent_tool" for evidence in assessment.semantic.evidence)
+                    if assessment.semantic and assessment.semantic.provider == "agent"
+                    else 0
                 ),
             )
         )

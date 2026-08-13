@@ -104,3 +104,10 @@ intelligence:
     model: qwen3:4b
     minimum_confidence: 0.70
     max_description_characters: 12000
+  agent:
+    enabled: false
+    model: qwen3:4b
+    max_tool_rounds: 4
+    retrieval_limit: 4
+    minimum_confidence: 0.70
+    minimum_score: 40

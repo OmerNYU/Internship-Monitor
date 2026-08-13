@@ -211,6 +211,17 @@ class StructuredAssessmentConfiguration(StrictConfigModel):
     max_description_characters: int = Field(default=12_000, ge=500, le=50_000)
 
 
+class AgentConfiguration(StrictConfigModel):
+    """Bounded local agent settings for explicit offline adjudication only."""
+
+    enabled: bool = False
+    model: NonEmptyString = "qwen3:4b"
+    max_tool_rounds: int = Field(default=4, ge=1, le=8)
+    retrieval_limit: int = Field(default=4, ge=1, le=8)
+    minimum_confidence: float = Field(default=0.70, ge=0, le=1)
+    minimum_score: int = Field(default=40, ge=0, le=100)
+
+
 class IntelligenceConfiguration(StrictConfigModel):
     """Optional local intelligence boundary, separate from deterministic assessment policy."""
 
@@ -221,6 +232,7 @@ class IntelligenceConfiguration(StrictConfigModel):
     structured_assessment: StructuredAssessmentConfiguration = Field(
         default_factory=StructuredAssessmentConfiguration
     )
+    agent: AgentConfiguration = Field(default_factory=AgentConfiguration)
 
 
 class SearchConfiguration(StrictConfigModel):

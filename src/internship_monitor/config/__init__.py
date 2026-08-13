@@ -7,6 +7,7 @@ from internship_monitor.config.loader import (
     load_search_configuration,
 )
 from internship_monitor.config.models import (
+    AgentConfiguration,
     AuthorizationConfig,
     CompanyAllowlist,
     CompanyConfig,
@@ -30,6 +31,7 @@ from internship_monitor.config.models import (
 )
 
 __all__ = [
+    "AgentConfiguration",
     "AuthorizationConfig",
     "CompanyAllowlist",
     "CompanyConfig",

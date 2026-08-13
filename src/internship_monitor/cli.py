@@ -25,9 +25,13 @@ from internship_monitor.evaluation import (
     report_as_dict,
 )
 from internship_monitor.intelligence import (
+    AgenticAdjudicationProvider,
+    CorpusError,
     EmbeddingAssessmentProvider,
+    LocalRagRetriever,
     ProviderHealthStatus,
     StructuredLLMAssessmentProvider,
+    build_corpus_index,
     provider_from_configuration,
 )
 from internship_monitor.notifications import (
@@ -144,7 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate_parser.add_argument(
         "--provider",
-        choices=("deterministic", "embedding", "llm"),
+        choices=("deterministic", "embedding", "llm", "agent"),
         default="deterministic",
         help="Assessment provider to compare; intelligence providers are evaluation-only.",
     )
@@ -154,6 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("state/embeddings.sqlite3"),
         help="Ignored local SQLite cache used only by embedding evaluation.",
     )
+    evaluate_parser.add_argument("--rag-index", type=Path, default=Path("state/rag.sqlite3"))
     evaluate_parser.add_argument(
         "--json",
         action="store_true",
@@ -176,6 +181,27 @@ def build_parser() -> argparse.ArgumentParser:
         dest="json_output",
         help="Render the local health result as JSON.",
     )
+    rag_index_parser = subparsers.add_parser("rag-index")
+    rag_index_parser.add_argument(
+        "--profile", type=Path, default=Path("config/profile.example.yaml")
+    )
+    rag_index_parser.add_argument("--corpus-dir", type=Path, default=Path("config.local/rag"))
+    rag_index_parser.add_argument("--index", type=Path, default=Path("state/rag.sqlite3"))
+    rag_index_parser.add_argument(
+        "--embedding-cache", type=Path, default=Path("state/embeddings.sqlite3")
+    )
+    rag_index_parser.add_argument("--labeled-dataset", type=Path)
+    rag_search_parser = subparsers.add_parser("rag-search")
+    rag_search_parser.add_argument(
+        "--profile", type=Path, default=Path("config/profile.example.yaml")
+    )
+    rag_search_parser.add_argument("--index", type=Path, default=Path("state/rag.sqlite3"))
+    rag_search_parser.add_argument(
+        "--embedding-cache", type=Path, default=Path("state/embeddings.sqlite3")
+    )
+    rag_search_parser.add_argument("--query", required=True)
+    rag_search_parser.add_argument("--k", type=int, default=4)
+    rag_search_parser.add_argument("--json", action="store_true", dest="json_output")
     deliver_parser = subparsers.add_parser(
         "deliver",
         help="Process due queued notifications; it never performs discovery or analysis.",
@@ -205,6 +231,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "rag-index":
+        return _rag_index_command(args, parser)
+    if args.command == "rag-search":
+        return _rag_search_command(args, parser)
     if args.command == "intelligence-status":
         return _intelligence_status_command(args)
     if args.command == "evaluate":
@@ -315,23 +345,76 @@ def _evaluate_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
     configuration = load_search_configuration(args.profile)
     baseline = DeterministicAssessor(configuration)
     provider: AssessmentProvider = baseline
-    if args.provider in {"embedding", "llm"}:
+    if args.provider in {"embedding", "llm", "agent"}:
         embedding_provider = EmbeddingAssessmentProvider(
             configuration,
             baseline=baseline,
             cache_path=args.embedding_cache,
         )
         provider = embedding_provider
-        if args.provider == "llm":
+        if args.provider in {"llm", "agent"}:
             provider = StructuredLLMAssessmentProvider(
                 configuration,
                 baseline=embedding_provider,
+            )
+        if args.provider == "agent":
+            provider = AgenticAdjudicationProvider(
+                configuration,
+                baseline=provider,
+                retriever=LocalRagRetriever(
+                    configuration=configuration,
+                    index_path=args.rag_index,
+                    embedding_cache_path=args.embedding_cache,
+                ),
             )
     report = evaluate_gold_cases(cases, provider)
     if args.json_output:
         print(json.dumps(report_as_dict(report), indent=2, sort_keys=True))
     else:
         print(format_evaluation_report(report))
+    return 0
+
+
+def _rag_index_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    try:
+        count = build_corpus_index(
+            configuration=load_search_configuration(args.profile),
+            corpus_dir=args.corpus_dir,
+            index_path=args.index,
+            embedding_cache_path=args.embedding_cache,
+            labeled_dataset=args.labeled_dataset,
+        )
+    except CorpusError as error:
+        parser.error(str(error))
+    print(
+        f"RAG index complete: {count} chunks written locally; no discovery or notifications occurred."  # noqa: E501
+    )
+    return 0
+
+
+def _rag_search_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    try:
+        results = LocalRagRetriever(
+            configuration=load_search_configuration(args.profile),
+            index_path=args.index,
+            embedding_cache_path=args.embedding_cache,
+        ).retrieve(args.query, limit=args.k)
+    except CorpusError as error:
+        parser.error(str(error))
+    payload = [
+        {
+            "document_id": item.document_id,
+            "kind": item.kind.value,
+            "chunk_index": item.chunk_index,
+            "excerpt": item.excerpt,
+            "similarity": item.similarity,
+        }
+        for item in results
+    ]
+    if args.json_output:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(f"RAG search complete: {len(payload)} local results.")
     return 0
 
 
