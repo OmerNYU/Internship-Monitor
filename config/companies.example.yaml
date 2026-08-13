@@ -1,4 +1,5 @@
 # Monitoring is allowlist-only. Copy this file into config.local/ and explicitly approve entries.
+# board_token is the public Greenhouse board token or Lever site slug.
 companies:
   - name: Example Company
     enabled: false

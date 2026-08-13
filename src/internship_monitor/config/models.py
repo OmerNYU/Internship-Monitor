@@ -161,7 +161,7 @@ class SearchConfiguration(StrictConfigModel):
 
 
 class CompanySourceConfig(StrictConfigModel):
-    """Source selection data consumed later by the adapter registry."""
+    """Public source selection data, including a Greenhouse board token or Lever site slug."""
 
     type: NonEmptyString
     board_token: NonEmptyString | None = None

@@ -10,6 +10,7 @@ import httpx
 
 from internship_monitor.adapters import (
     GreenhouseAdapter,
+    LeverAdapter,
     SourceAdapter,
     SourceRunResult,
     SourceRunSuccess,
@@ -299,6 +300,9 @@ async def _run_with_factory(
 
 
 def _adapter_for_company(company: CompanyConfig, client: httpx.AsyncClient) -> SourceAdapter:
-    if company.source.type.casefold() == "greenhouse":
+    source_type = company.source.type.casefold()
+    if source_type == "greenhouse":
         return GreenhouseAdapter(company, client)
+    if source_type == "lever":
+        return LeverAdapter(company, client)
     return _UnsupportedSourceAdapter(company)

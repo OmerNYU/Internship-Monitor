@@ -8,8 +8,8 @@ never substitutes for evidence about work authorisation or language requirements
 
 ## Project status
 
-Sessions 1â€“18 are implemented. The project has a canonical job model, strict public/private
-configuration, failure-isolated async source adapters, a Greenhouse adapter, deterministic role
+Sessions 1 through 19 are implemented. The project has a canonical job model, strict public/private
+configuration, failure-isolated async source adapters, Greenhouse and Lever adapters, deterministic role
 and eligibility assessment, country/region preferences, durable listing transitions, grouping,
 alert policy, notification queueing with retries and daily-digest support, and structured
 operational reporting. Email and WhatsApp delivery exist as local, explicit `deliver` capability;
@@ -40,6 +40,11 @@ Public examples live in `config/`. Put your personal profile, notification setti
 credentials, and operational state in ignored locations such as `config.local/`, `.env`, and
 `state/`. Never commit contact details, work-authorisation records, provider credentials, or
 alert history.
+
+Company sources remain explicit allowlist entries. Use `type: greenhouse` with its public board
+token, or `type: lever` with the public Lever site slug from `jobs.lever.co/<site>`; both use the
+existing `board_token` field. Lever data is normalized at the adapter boundary before it reaches
+any analysis or notification code.
 
 The normal monitor path only discovers, assesses, persists, and optionally queues alerts:
 
