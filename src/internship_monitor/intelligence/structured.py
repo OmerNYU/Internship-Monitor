@@ -16,6 +16,11 @@ from internship_monitor.analysis import (
     SemanticAssessmentStatus,
     SemanticEvidence,
 )
+from internship_monitor.analysis.trace import (
+    IntelligenceStage,
+    append_intelligence_stage,
+    trace_status_from_semantic,
+)
 from internship_monitor.config import SearchConfiguration
 from internship_monitor.intelligence.embeddings import EmbeddingProviderError
 from internship_monitor.intelligence.semantic import _rescore
@@ -101,6 +106,20 @@ class StructuredLLMAssessmentProvider:
         self._client = client or OllamaStructuredAssessmentClient(configuration)
 
     def assess(self, listing: JobListing) -> JobAssessment:
+        """Preserve this provider's stage outcome alongside all prior provenance."""
+        result = self._assess(listing)
+        semantic = result.semantic
+        assert semantic is not None
+        return append_intelligence_stage(
+            result,
+            stage=IntelligenceStage.STRUCTURED_LLM,
+            status=trace_status_from_semantic(semantic.status.value, semantic.fallback_reason),
+            prior_role_level=semantic.original_role_level,
+            model=self._configuration.intelligence.structured_assessment.model,
+            fallback_reason=semantic.fallback_reason,
+        )
+
+    def _assess(self, listing: JobListing) -> JobAssessment:
         assessment = self._baseline.assess(listing)
         if assessment.is_hard_blocked:
             return replace(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 from internship_monitor.analysis.assessments import (
@@ -12,6 +12,7 @@ from internship_monitor.analysis.assessments import (
     GraduationStatus,
     HardBlocker,
     HardBlockerKind,
+    IntelligenceTrace,
     LanguageAssessment,
     LanguageStatus,
     LocationAssessment,
@@ -73,6 +74,7 @@ class JobAssessment:
     hard_blockers: tuple[HardBlocker, ...] = ()
     strength: OpportunityStrength = OpportunityStrength.REVIEW
     semantic: SemanticAssessment | None = None
+    intelligence_trace: IntelligenceTrace = field(default_factory=IntelligenceTrace)
 
     @property
     def is_hard_blocked(self) -> bool:
@@ -128,6 +130,7 @@ class ScoringEngine:
         language: LanguageAssessment,
         season: SeasonAssessment | None = None,
         semantic: SemanticAssessment | None = None,
+        intelligence_trace: IntelligenceTrace | None = None,
     ) -> JobAssessment:
         """Produce a deterministic score plus explainable blocking and ranking state."""
         if season is None:
@@ -197,6 +200,7 @@ class ScoringEngine:
             hard_blockers=hard_blockers,
             strength=strength,
             semantic=semantic,
+            intelligence_trace=intelligence_trace or IntelligenceTrace(),
         )
 
 
@@ -207,6 +211,9 @@ def _factor(category: str, status: StrEnum, points: int) -> ScoreFactor:
         points=points,
         reason=f"{category.capitalize()} is {status.value.replace('_', ' ')}: +{points} points.",
     )
+
+
+_STRONGLY_EXCLUDED_INTERN_CATEGORIES = frozenset({"audit"})
 
 
 def _hard_blockers(
@@ -258,9 +265,19 @@ def _hard_blockers(
                 language.required_languages,
             )
         )
-    if role.level is RoleMatchLevel.NOT_RELEVANT and (
-        role.matched_category == "excluded"
-        or "does not contain student or internship language" in role.reasons[0].casefold()
+    if (
+        role.level is RoleMatchLevel.NOT_RELEVANT
+        and (
+            not role.has_student_opportunity_evidence
+            or (
+                role.matched_category == "excluded"
+                and bool(set(role.matched_terms) & _STRONGLY_EXCLUDED_INTERN_CATEGORIES)
+            )
+        )
+        and (
+            role.matched_category == "excluded"
+            or "does not contain student or internship language" in role.reasons[0].casefold()
+        )
     ):
         blockers.append(
             HardBlocker(

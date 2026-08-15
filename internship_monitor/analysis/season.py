@@ -11,7 +11,7 @@ from internship_monitor.models import JobListing
 
 _SEASON_PATTERN = re.compile(
     r"\b(?P<term>spring|summer|fall|autumn|winter)[\s_/-]*(?P<year>20\d{2})"
-    r"(?:\s*(?:_|/|-|\u2013|\u2014)\s*(?P<end_year>20\d{2}|\d{2}))?\b",
+    r"(?:\s*(?:/|-|?|?)\s*(?P<end_year>20\d{2}|\d{2}))?\b",
     re.IGNORECASE,
 )
 _MONTH_PATTERN = (
@@ -21,7 +21,7 @@ _MONTH_PATTERN = (
 _DATE_RANGE_PATTERN = re.compile(
     rf"\b(?P<start_month>{_MONTH_PATTERN})\.?\s*"
     r"(?P<start_year>20\d{2})?\s*"
-    rf"(?:/|-|\u2013|\u2014|\bto\b|\bthrough\b|\buntil\b)\s*"
+    rf"(?:-|?|?|\bto\b|\bthrough\b|\buntil\b)\s*"
     rf"(?P<end_month>{_MONTH_PATTERN})\.?\s*(?P<end_year>20\d{{2}})\b",
     re.IGNORECASE,
 )
@@ -29,8 +29,6 @@ _EARLY_2027_WINTER_PATTERN = re.compile(
     r"\bwinter[\s_/-]*2027\b.{0,80}\bjan(?:uary)?\b.{0,40}\bfeb(?:ruary)?\b",
     re.IGNORECASE | re.DOTALL,
 )
-_HALF_YEAR_PATTERN = re.compile(r"\bH(?P<half>[12])\s*(?P<year>20\d{2})\b", re.IGNORECASE)
-
 _MONTHS = {
     "jan": 1,
     "feb": 2,
@@ -51,7 +49,6 @@ _MONTHS = {
 class _SeasonEvidence:
     identifiers: tuple[str, ...]
     has_ambiguous_winter: bool = False
-    has_ambiguous_half_year: bool = False
 
 
 def _month_number(value: str) -> int:
@@ -131,7 +128,6 @@ def _date_range_seasons(text: str) -> tuple[str, ...]:
 def _identified_evidence(text: str) -> _SeasonEvidence:
     identifiers: list[str] = []
     has_ambiguous_winter = False
-    has_ambiguous_half_year = bool(_HALF_YEAR_PATTERN.search(text))
     for match in _SEASON_PATTERN.finditer(text):
         term = match.group("term")
         end_year = match.group("end_year")
@@ -146,30 +142,13 @@ def _identified_evidence(text: str) -> _SeasonEvidence:
     for identifier in _date_range_seasons(text):
         if identifier not in identifiers:
             identifiers.append(identifier)
-    return _SeasonEvidence(
-        tuple(identifiers),
-        has_ambiguous_winter,
-        has_ambiguous_half_year,
-    )
+    return _SeasonEvidence(tuple(identifiers), has_ambiguous_winter)
 
 
 def assess_season(job: JobListing, profile: SearchProfile) -> SeasonAssessment:
     """Assess explicit term or bounded date-range evidence without inferring from posting dates."""
     evidence = _identified_evidence(f"{job.title}\n{job.description}")
     if not evidence.identifiers:
-        if evidence.has_ambiguous_half_year:
-            return SeasonAssessment(
-                status=SeasonStatus.UNKNOWN,
-                identified_seasons=(),
-                reasons=(
-                    "Half-year wording does not establish an internship term within "
-                    "configured seasons.",
-                ),
-                warnings=(
-                    "H2 2026 spans July through December and may overlap Winter 2026/27; "
-                    "confirm the actual internship dates.",
-                ),
-            )
         return SeasonAssessment(
             status=SeasonStatus.UNKNOWN,
             identified_seasons=(),
@@ -195,19 +174,6 @@ def assess_season(job: JobListing, profile: SearchProfile) -> SeasonAssessment:
             warnings=(
                 "Winter 2026 is not treated as the 2026/27 term without a cross-year label "
                 "or explicit late-2026/early-2027 dates.",
-            ),
-        )
-    if evidence.has_ambiguous_half_year:
-        return SeasonAssessment(
-            status=SeasonStatus.UNKNOWN,
-            identified_seasons=evidence.identifiers,
-            reasons=(
-                "Half-year wording does not establish an internship term within "
-                "configured seasons.",
-            ),
-            warnings=(
-                "H2 2026 spans July through December and may overlap Winter 2026/27; "
-                "confirm the actual internship dates.",
             ),
         )
     return SeasonAssessment(

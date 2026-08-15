@@ -11,6 +11,11 @@ from internship_monitor.analysis.location import assess_location
 from internship_monitor.analysis.roles import RoleClassifier
 from internship_monitor.analysis.scoring import JobAssessment, ScoringEngine
 from internship_monitor.analysis.season import assess_season
+from internship_monitor.analysis.trace import (
+    IntelligenceStage,
+    IntelligenceTraceStatus,
+    append_intelligence_stage,
+)
 from internship_monitor.config import SearchConfiguration
 from internship_monitor.models import JobListing
 
@@ -40,7 +45,7 @@ class DeterministicAssessor:
     def assess(self, listing: JobListing) -> JobAssessment:
         """Return the standard deterministic assessment for one canonical listing."""
         location = assess_location(listing, self._configuration.regional_strategy)
-        return self._scoring_engine.assess(
+        assessment = self._scoring_engine.assess(
             listing,
             role=self._classifier.classify(listing),
             location=location,
@@ -52,4 +57,9 @@ class DeterministicAssessor:
             ),
             language=assess_language(listing, self._configuration.language_profile),
             season=assess_season(listing, self._configuration.profile),
+        )
+        return append_intelligence_stage(
+            assessment,
+            stage=IntelligenceStage.DETERMINISTIC,
+            status=IntelligenceTraceStatus.SUCCEEDED,
         )

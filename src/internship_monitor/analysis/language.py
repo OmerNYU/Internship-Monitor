@@ -60,24 +60,73 @@ def _accepts_language(text: str, language: str) -> bool:
     )
 
 
+def _coordinated_required_groups(text: str) -> tuple[tuple[str, ...], ...]:
+    """Extract mandatory AND/OR language clauses without treating preferences as requirements."""
+    normalized = _normalize(text)
+    groups: list[tuple[str, ...]] = []
+    for match in re.finditer(r"(?:fluent|proficient) in (?P<clause>[a-z ]+)", normalized):
+        clause = match.group("clause")
+        languages = tuple(
+            sorted(
+                (
+                    language
+                    for language in KNOWN_LANGUAGES
+                    if re.search(rf"\b{re.escape(_normalize(language))}\b", clause)
+                ),
+                key=lambda language: clause.index(_normalize(language)),
+            )
+        )
+        if not languages:
+            continue
+        if "and or" in clause and len(languages) >= 2:
+            groups.extend((language,) for language in languages[:-2])
+            groups.append(languages[-2:])
+        else:
+            groups.extend((language,) for language in languages)
+    return tuple(groups)
+
+
+def _flatten(groups: tuple[tuple[str, ...], ...]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(language for group in groups for language in group))
+
+
+def _group_reason(group: tuple[str, ...]) -> str:
+    if len(group) == 1:
+        return group[0]
+    return " or ".join(group)
+
+
 def assess_language(job: JobListing, profile: LanguageProfile) -> LanguageAssessment:
     """Assess explicit language requirements without assuming a country's working language."""
     text = f"{job.title}\n{job.description}"
-    required = tuple(language for language in KNOWN_LANGUAGES if _requires_language(text, language))
+    groups = list(_coordinated_required_groups(text))
+    grouped_languages = {language for group in groups for language in group}
+    for language in KNOWN_LANGUAGES:
+        if _requires_language(text, language) and language not in grouped_languages:
+            groups.append((language,))
+    required_groups = tuple(groups)
+    required = _flatten(required_groups)
     supported = {_normalize(language) for language in profile.spoken_languages}
-    unsupported = tuple(language for language in required if _normalize(language) not in supported)
+    unsupported_groups = tuple(
+        group
+        for group in required_groups
+        if not any(_normalize(language) in supported for language in group)
+    )
 
-    if unsupported:
+    if unsupported_groups:
+        missing = ", ".join(_group_reason(group) for group in unsupported_groups)
         return LanguageAssessment(
             status=LanguageStatus.INCOMPATIBLE,
             required_languages=required,
-            reasons=(f"Listing explicitly requires {', '.join(unsupported)}.",),
+            mandatory_language_groups=required_groups,
+            reasons=(f"Listing explicitly requires unsupported language group(s): {missing}.",),
         )
 
     if required:
         return LanguageAssessment(
             status=LanguageStatus.COMPATIBLE,
             required_languages=required,
+            mandatory_language_groups=required_groups,
             reasons=(f"Profile supports stated language requirement: {', '.join(required)}.",),
         )
 
@@ -88,12 +137,14 @@ def assess_language(job: JobListing, profile: LanguageProfile) -> LanguageAssess
         return LanguageAssessment(
             status=LanguageStatus.COMPATIBLE,
             required_languages=(),
+            mandatory_language_groups=(),
             reasons=(f"Listing explicitly accepts {', '.join(accepted)}.",),
         )
 
     return LanguageAssessment(
         status=LanguageStatus.REQUIRES_VERIFICATION,
         required_languages=(),
+        mandatory_language_groups=(),
         reasons=("Listing does not state a language requirement.",),
         warnings=(
             "Language eligibility requires verification rather than country-based assumptions.",

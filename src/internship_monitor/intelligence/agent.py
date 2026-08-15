@@ -19,6 +19,12 @@ from internship_monitor.analysis import (
     SemanticAssessmentStatus,
     SemanticEvidence,
 )
+from internship_monitor.analysis.trace import (
+    IntelligenceStage,
+    IntelligenceTraceStatus,
+    append_intelligence_stage,
+    trace_status_from_semantic,
+)
 from internship_monitor.config import SearchConfiguration
 from internship_monitor.intelligence.rag import CorpusKind, RagRetriever, RetrievedContext
 from internship_monitor.intelligence.semantic import _rescore
@@ -130,6 +136,50 @@ class AgenticAdjudicationProvider:
         self._client = client or OllamaAdjudicationClient(configuration)
 
     def assess(self, listing: JobListing) -> JobAssessment:
+        """Preserve RAG and agent provenance even when adjudication falls back."""
+        result = self._assess(listing)
+        semantic = result.semantic
+        assert semantic is not None
+        tools = tuple(
+            item.text
+            for item in semantic.evidence
+            if item.label == "agent_tool" and item.text is not None
+        )
+        source_ids = tuple(
+            item.label.removeprefix("context:")
+            for item in semantic.evidence
+            if item.label.startswith("context:")
+        )
+        rag_status = (
+            IntelligenceTraceStatus.SUCCEEDED
+            if source_ids
+            else IntelligenceTraceStatus.UNAVAILABLE
+            if semantic.fallback_reason and "corpus index" in semantic.fallback_reason
+            else IntelligenceTraceStatus.NOT_RUN
+        )
+        result = append_intelligence_stage(
+            result,
+            stage=IntelligenceStage.RAG,
+            status=rag_status,
+            retrieval_count=len(source_ids),
+            source_ids=source_ids,
+            fallback_reason=semantic.fallback_reason
+            if rag_status is IntelligenceTraceStatus.UNAVAILABLE
+            else None,
+        )
+        return append_intelligence_stage(
+            result,
+            stage=IntelligenceStage.AGENT,
+            status=trace_status_from_semantic(semantic.status.value, semantic.fallback_reason),
+            prior_role_level=semantic.original_role_level,
+            model=self._configuration.intelligence.agent.model,
+            fallback_reason=semantic.fallback_reason,
+            tool_names=tools,
+            retrieval_count=len(source_ids),
+            source_ids=source_ids,
+        )
+
+    def _assess(self, listing: JobListing) -> JobAssessment:
         assessment = self._baseline.assess(listing)
         if not _eligible(assessment) or not self._configuration.intelligence.agent.enabled:
             return replace(

@@ -1,4 +1,5 @@
-from contextlib import redirect_stdout
+import json
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import UTC, datetime, timedelta
 from io import StringIO
 from pathlib import Path
@@ -16,6 +17,91 @@ from internship_monitor.notifications import Notification, NotificationQueueRepo
 
 
 class CliTests(TestCase):
+    def test_validate_human_gold_reports_exact_provenance_counts(self) -> None:
+        payload = {
+            "schema_version": "human_gold_v1",
+            "case_id": "case",
+            "source_identity": "sanitized:case",
+            "listing": {
+                "source": "sanitized",
+                "source_job_id": "case",
+                "company": "Example",
+                "title": "Intern",
+                "description": "Student internship.",
+                "apply_url": "https://example.com/jobs/case",
+                "discovered_at": "2026-08-14T10:00:00Z",
+            },
+            "expected": {},
+            "human_rationale": "Independent review.",
+            "labeling_provenance": "human",
+        }
+        cases = []
+        for index, provenance in enumerate(("human", "human_reviewed", "template")):
+            case = json.loads(json.dumps(payload))
+            case["case_id"] = f"case-{index}"
+            case["listing"]["source_job_id"] = f"case-{index}"
+            case["labeling_provenance"] = provenance
+            cases.append(case)
+        with TemporaryDirectory() as directory:
+            dataset = Path(directory) / "human.jsonl"
+            dataset.write_text("".join(json.dumps(case) + "\n" for case in cases), encoding="utf-8")
+            output = StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    ["validate-human-gold", "--dataset", str(dataset), "--allow-templates"]
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(
+                output.getvalue().strip(),
+                "Human-gold dataset is valid: 1 human, 1 human_reviewed, 1 template.",
+            )
+            stderr = StringIO()
+            with self.assertRaises(SystemExit), redirect_stderr(stderr):
+                main(["validate-human-gold", "--dataset", str(dataset)])
+            self.assertIn("unreviewed curation template", stderr.getvalue())
+
+    def test_validate_human_gold_counts_all_human_and_human_template_mix(self) -> None:
+        base = {
+            "schema_version": "human_gold_v1",
+            "case_id": "case",
+            "source_identity": "sanitized:case",
+            "listing": {
+                "source": "sanitized",
+                "source_job_id": "case",
+                "company": "Example",
+                "title": "Intern",
+                "description": "Student internship.",
+                "apply_url": "https://example.com/jobs/case",
+                "discovered_at": "2026-08-14T10:00:00Z",
+            },
+            "expected": {},
+            "human_rationale": "Independent review.",
+            "labeling_provenance": "human",
+        }
+        with TemporaryDirectory() as directory:
+            for name, provenances, expected, arguments in (
+                ("human", ("human", "human"), "2 human.", ()),
+                ("mixed", ("human", "template"), "1 human, 1 template.", ("--allow-templates",)),
+            ):
+                records = []
+                for index, provenance in enumerate(provenances):
+                    record = json.loads(json.dumps(base))
+                    record["case_id"] = f"{name}-{index}"
+                    record["listing"]["source_job_id"] = f"{name}-{index}"
+                    record["labeling_provenance"] = provenance
+                    records.append(record)
+                dataset = Path(directory) / f"{name}.jsonl"
+                dataset.write_text(
+                    "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+                )
+                output = StringIO()
+                with redirect_stdout(output):
+                    exit_code = main(["validate-human-gold", "--dataset", str(dataset), *arguments])
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(
+                    output.getvalue().strip(), f"Human-gold dataset is valid: {expected}"
+                )
+
     def test_status_reports_opportunity_grouping_is_ready(self) -> None:
         output = StringIO()
 
@@ -41,6 +127,34 @@ class CliTests(TestCase):
             self.assertIn("No state was written", output.getvalue())
             self.assertIn("geographic routing: none", output.getvalue())
             self.assertFalse(state_path.exists())
+
+    def test_dry_run_can_export_a_private_canonical_listing_snapshot_without_state(self) -> None:
+        with TemporaryDirectory() as directory:
+            state_path = Path(directory) / "state" / "jobs.sqlite3"
+            notification_state_path = Path(directory) / "state" / "notifications.sqlite3"
+            export_path = Path(directory) / "evaluation.local" / "listings.jsonl"
+            output = StringIO()
+
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "run",
+                        "--dry-run",
+                        "--state",
+                        str(state_path),
+                        "--notification-state",
+                        str(notification_state_path),
+                        "--export-listings",
+                        str(export_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(export_path.exists())
+            self.assertEqual(export_path.read_text(encoding="utf-8"), "")
+            self.assertIn("Canonical listing export complete: 0", output.getvalue())
+            self.assertFalse(state_path.exists())
+            self.assertFalse(notification_state_path.exists())
 
     def test_dry_run_can_preview_notifications_without_external_delivery(self) -> None:
         with TemporaryDirectory() as directory:

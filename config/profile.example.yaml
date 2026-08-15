@@ -3,34 +3,56 @@ profile:
   degree_level: bachelors
   field_of_study: computer_science
   expected_graduation: 2029-05
-  primary_season: summer_2028
-  additional_seasons: [spring_2028, fall_2028, off_cycle_2028]
+  # Internship Monitor is currently focused on Winter 2026/27, Spring 2027, and Summer 2027.
+  # Use winter_YYYY_YY for the cross-year winter term; Summer is the primary season.
+  primary_season: summer_2027
+  additional_seasons: [winter_2026_27, spring_2027]
   # Signals are grouped for readability; future matching reads values from configuration.
   skill_signals:
     programming: [Python, TypeScript, SQL]
     engineering: [REST APIs, full-stack development, developer tooling]
     cloud: [Docker, AWS, Linux, CI/CD]
-    ai_ml: [machine learning, LLM systems, model evaluation]
+    ai_ml: [machine learning, applied AI, artificial intelligence, generative AI, LLM, LLM systems, NLP, natural language processing, computer vision, deep learning, model evaluation]
     consulting: [data analysis, structured problem solving, technical communication]
 
 role_preferences:
   primary:
     - Software Engineering Intern
     - Backend Engineering Intern
+    - Platform Engineering Intern
+    - Infrastructure Engineering Intern
+    - Infrastructure Intern
+    - Cloud Engineering Intern
+    - DevOps Intern
+    - SRE Intern
     - Machine Learning Engineering Intern
+    - Machine Learning Intern
+    - ML Engineer Intern
     - AI Engineering Intern
+    - AI Applied Scientist Intern
+    - Artificial Intelligence Intern
+    - Applied AI Intern
+    - LLM Engineering Intern
     - Data Engineering Intern
+    - Data Science Intern
+    - Data Scientist Intern
   secondary:
     - Technical Product Intern
+    - Product Management Intern
     - AI Product Intern
   consulting:
     - Technology Consulting Intern
+    - Digital Consulting Intern
     - AI Consulting Intern
     - Data and Analytics Consulting Intern
     - Digital Transformation Intern
   adjacent_requires_description_match:
+    - Deployment Strategist
     - Technology Analyst
     - Business Analyst Intern
+    - Analytics Intern
+    - Applied Scientist Intern
+    - Research Engineer Intern
   excluded_by_default: [audit, tax, accounting, pure sales, human resources, marketing]
 
 language_profile:

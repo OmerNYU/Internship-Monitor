@@ -1,10 +1,13 @@
 # Internship Monitor
 
 Internship Monitor discovers internship listings, assesses their relevance and likely
-eligibility, groups matching opportunities, and safely queues explainable alerts. Its current
-search focus is Summer 2027 engineering, AI, data, technical product, and consulting roles,
-with EMEA and APAC as the primary geographic focus. Regional preference improves relevance; it
-never substitutes for evidence about work authorisation or language requirements.
+eligibility, groups matching opportunities, and safely queues explainable alerts. It is strictly
+internship-only: new-grad, graduate-program, junior full-time, contractor, and other professional
+roles are out of scope. It currently searches internship opportunities for Winter 2026/27 where
+available, Spring 2027, and Summer 2027; Summer 2027 is primary. The role focus is engineering,
+AI, data, technical product, and consulting, with EMEA and APAC as the primary geographic focus.
+Regional preference improves relevance; it never substitutes for evidence about work authorisation
+or language requirements.
 
 ## Project status
 

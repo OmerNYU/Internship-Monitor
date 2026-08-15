@@ -1,7 +1,41 @@
 """Offline, typed evaluation contracts for deterministic and future intelligence providers."""
 
+from internship_monitor.evaluation.ablation import (
+    AblationCaseOutcome,
+    AblationReport,
+    ProviderAblation,
+    ProviderEffects,
+    ProviderTraceSummary,
+    RelevanceMetrics,
+    SafetyMetrics,
+    format_ablation_markdown,
+    run_ablation,
+    write_ablation_artifacts,
+)
 from internship_monitor.evaluation.dataset import GoldDatasetError, load_gold_cases
-from internship_monitor.evaluation.models import GoldActionability, GoldCase, GoldLabels
+from internship_monitor.evaluation.export import ListingExportError, export_canonical_listings
+from internship_monitor.evaluation.human import (
+    BalancedCurationSummary,
+    HumanEvaluationReport,
+    PositiveEnrichedCurationSummary,
+    curate_balanced_human_label_templates,
+    curate_human_label_templates,
+    curate_positive_enriched_human_label_templates,
+    evaluate_human_gold_cases,
+    format_human_evaluation_report,
+    human_report_as_dict,
+    load_human_gold_cases,
+)
+from internship_monitor.evaluation.models import (
+    GoldActionability,
+    GoldCase,
+    GoldLabels,
+    HumanGoldCase,
+    HumanGoldLabels,
+    HumanLabelState,
+    HumanRelevance,
+    LabelingProvenance,
+)
 from internship_monitor.evaluation.runner import (
     CaseEvaluation,
     CategoricalMetric,
@@ -9,6 +43,7 @@ from internship_monitor.evaluation.runner import (
     EvaluationReport,
     FieldMismatch,
     HardBlockerMetrics,
+    ProviderStageMetric,
     decision_vector_from_assessment,
     evaluate_gold_cases,
     format_evaluation_report,
@@ -16,6 +51,9 @@ from internship_monitor.evaluation.runner import (
 )
 
 __all__ = [
+    "AblationCaseOutcome",
+    "AblationReport",
+    "BalancedCurationSummary",
     "CaseEvaluation",
     "CategoricalMetric",
     "DecisionVector",
@@ -26,9 +64,34 @@ __all__ = [
     "GoldDatasetError",
     "GoldLabels",
     "HardBlockerMetrics",
+    "HumanEvaluationReport",
+    "HumanGoldCase",
+    "HumanGoldLabels",
+    "HumanLabelState",
+    "HumanRelevance",
+    "LabelingProvenance",
+    "ListingExportError",
+    "PositiveEnrichedCurationSummary",
+    "ProviderAblation",
+    "ProviderEffects",
+    "ProviderStageMetric",
+    "ProviderTraceSummary",
+    "RelevanceMetrics",
+    "SafetyMetrics",
+    "curate_balanced_human_label_templates",
+    "curate_human_label_templates",
+    "curate_positive_enriched_human_label_templates",
     "decision_vector_from_assessment",
     "evaluate_gold_cases",
+    "evaluate_human_gold_cases",
+    "export_canonical_listings",
+    "format_ablation_markdown",
     "format_evaluation_report",
+    "format_human_evaluation_report",
+    "human_report_as_dict",
     "load_gold_cases",
+    "load_human_gold_cases",
     "report_as_dict",
+    "run_ablation",
+    "write_ablation_artifacts",
 ]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from internship_monitor.config import RolePreferences
@@ -29,6 +29,7 @@ class RoleAssessment:
     matched_terms: tuple[str, ...]
     reasons: tuple[str, ...]
     warnings: tuple[str, ...] = ()
+    has_student_opportunity_evidence: bool = False
 
     @property
     def is_relevant(self) -> bool:
@@ -51,19 +52,19 @@ class RoleClassifier:
         """Return an explainable role outcome without making a score or alert decision."""
         title = _normalize(job.title)
         description = _normalize(job.description)
+        has_student_evidence = _has_student_opportunity_language(title, description)
 
         excluded = _first_matching_term(title, self._role_preferences.excluded_by_default)
         if excluded is not None:
-            return RoleAssessment(
+            assessment = RoleAssessment(
                 level=RoleMatchLevel.NOT_RELEVANT,
                 matched_category="excluded",
                 matched_terms=(excluded,),
                 reasons=(f"Title matched excluded category: {excluded}.",),
                 warnings=("Excluded categories are not prioritized by default.",),
             )
-
-        if not _has_student_opportunity_language(title, description):
-            return RoleAssessment(
+        elif not has_student_evidence:
+            assessment = RoleAssessment(
                 level=RoleMatchLevel.NOT_RELEVANT,
                 matched_category=None,
                 matched_terms=(),
@@ -72,73 +73,62 @@ class RoleClassifier:
                     "Full-time roles are not treated as internships without student evidence.",
                 ),
             )
-
-        primary = _first_matching_term(
-            title,
-            self._role_preferences.primary,
-            allow_engineer_variant=True,
-        )
-        if primary is not None:
-            return self._direct_assessment(
-                RoleMatchLevel.STRONG_MATCH,
-                "primary",
-                primary,
-                description,
+        else:
+            primary = _first_role_match(
+                title, job.title, self._role_preferences.primary, allow_engineer_variant=True
             )
-
-        secondary = _first_matching_term(
-            title,
-            self._role_preferences.secondary,
-            allow_engineer_variant=True,
-        )
-        if secondary is not None:
-            return self._direct_assessment(
-                RoleMatchLevel.RELEVANT,
-                "secondary",
-                secondary,
-                description,
+            secondary = _first_role_match(
+                title, job.title, self._role_preferences.secondary, allow_engineer_variant=True
             )
-
-        consulting = _first_matching_term(title, self._role_preferences.consulting)
-        if consulting is not None:
-            return self._direct_assessment(
-                RoleMatchLevel.RELEVANT,
-                "consulting",
-                consulting,
-                description,
+            consulting = _first_role_match(title, job.title, self._role_preferences.consulting)
+            adjacent = _first_role_match(
+                title,
+                job.title,
+                self._role_preferences.adjacent_requires_description_match,
+                allow_engineer_variant=True,
             )
-
-        adjacent = _first_matching_term(
-            title,
-            self._role_preferences.adjacent_requires_description_match,
-            allow_engineer_variant=True,
-        )
-        if adjacent is not None:
-            evidence = self._description_evidence(description)
-            if evidence:
-                return RoleAssessment(
-                    level=RoleMatchLevel.REVIEW,
-                    matched_category="adjacent",
-                    matched_terms=(adjacent,),
-                    reasons=(f"Title matched adjacent role: {adjacent}.", *evidence),
-                    warnings=(
-                        "Adjacent titles require manual review even with matching evidence.",
-                    ),
+            if primary is not None:
+                assessment = self._direct_assessment(
+                    RoleMatchLevel.STRONG_MATCH, "primary", primary, description
                 )
-            return RoleAssessment(
-                level=RoleMatchLevel.NOT_RELEVANT,
-                matched_category="adjacent",
-                matched_terms=(adjacent,),
-                reasons=(f"Title matched adjacent role: {adjacent}.",),
-                warnings=("Adjacent title lacks configured technical or consulting evidence.",),
-            )
-
-        return RoleAssessment(
-            level=RoleMatchLevel.NOT_RELEVANT,
-            matched_category=None,
-            matched_terms=(),
-            reasons=("Title did not match a configured role category.",),
-        )
+            elif secondary is not None:
+                assessment = self._direct_assessment(
+                    RoleMatchLevel.RELEVANT, "secondary", secondary, description
+                )
+            elif consulting is not None:
+                assessment = self._direct_assessment(
+                    RoleMatchLevel.RELEVANT, "consulting", consulting, description
+                )
+            elif adjacent is not None:
+                evidence = self._description_evidence(description)
+                if evidence:
+                    assessment = RoleAssessment(
+                        level=RoleMatchLevel.REVIEW,
+                        matched_category="adjacent",
+                        matched_terms=(adjacent,),
+                        reasons=(f"Title matched adjacent role: {adjacent}.", *evidence),
+                        warnings=(
+                            "Adjacent titles require manual review even with matching evidence.",
+                        ),
+                    )
+                else:
+                    assessment = RoleAssessment(
+                        level=RoleMatchLevel.NOT_RELEVANT,
+                        matched_category="adjacent",
+                        matched_terms=(adjacent,),
+                        reasons=(f"Title matched adjacent role: {adjacent}.",),
+                        warnings=(
+                            "Adjacent title lacks configured technical or consulting evidence.",
+                        ),
+                    )
+            else:
+                assessment = RoleAssessment(
+                    level=RoleMatchLevel.NOT_RELEVANT,
+                    matched_category=None,
+                    matched_terms=(),
+                    reasons=("Title did not match a configured role category.",),
+                )
+        return replace(assessment, has_student_opportunity_evidence=has_student_evidence)
 
     def _direct_assessment(
         self,
@@ -161,6 +151,8 @@ class RoleClassifier:
             signal = _first_matching_term(description, signals)
             if signal is not None:
                 evidence.append(f"Description matched {group} signal: {signal}.")
+        if _has_business_technical_composition(description):
+            evidence.append("Description combines data analysis with technical-business delivery.")
         return tuple(evidence)
 
 
@@ -186,6 +178,65 @@ def _term_variants(term: str, *, allow_engineer_variant: bool) -> tuple[str, ...
     if " engineer " in f" {normalized} ":
         variants.append(re.sub(r"\bengineer\b", "engineering", term, flags=re.IGNORECASE))
     return tuple(variants)
+
+
+def _first_role_match(
+    normalized_title: str,
+    raw_title: str,
+    terms: tuple[str, ...],
+    *,
+    allow_engineer_variant: bool = False,
+) -> str | None:
+    direct = _first_matching_term(
+        normalized_title, terms, allow_engineer_variant=allow_engineer_variant
+    )
+    if direct is not None:
+        return direct
+    if not _has_title_internship_marker(raw_title):
+        return None
+    for term in terms:
+        base = _internship_free_term(term)
+        if base == term:
+            continue
+        variants = _term_variants(base, allow_engineer_variant=allow_engineer_variant)
+        if any(_contains_phrase(normalized_title, variant) for variant in variants):
+            return term
+    return None
+
+
+def _internship_free_term(term: str) -> str:
+    return " ".join(
+        token for token in _normalize(term).split() if token not in {"intern", "internship"}
+    )
+
+
+def _has_title_internship_marker(raw_title: str) -> bool:
+    """Recognize a role-level internship suffix, not phrases such as coordinator."""
+    for match in re.finditer(r"\b(?:intern|internship)\b", raw_title, flags=re.IGNORECASE):
+        suffix = raw_title[match.end() :].lstrip()
+        if not suffix or not suffix[0].isalnum():
+            return True
+    return False
+
+
+def _has_business_technical_composition(description: str) -> bool:
+    data = any(_contains_phrase(description, term) for term in ("data", "analysis", "analytics"))
+    delivery = any(
+        _contains_phrase(description, term)
+        for term in (
+            "deploy",
+            "deployment",
+            "implementation",
+            "integrate",
+            "integration",
+            "pipeline",
+        )
+    )
+    product_workflow = any(
+        _contains_phrase(description, term)
+        for term in ("product", "workflow", "customer", "solution", "solutions", "stakeholder")
+    )
+    return data and (delivery or product_workflow)
 
 
 def _first_matching_term(

@@ -62,6 +62,17 @@ class HardBlocker:
     evidence: tuple[str, ...]
 
 
+class IntelligenceTraceStatus(StrEnum):
+    """Safe lifecycle state for one optional intelligence stage."""
+
+    NOT_RUN = "not_run"
+    SUCCEEDED = "succeeded"
+    UNAVAILABLE = "unavailable"
+    INVALID_OUTPUT = "invalid_output"
+    FALLBACK = "fallback"
+    SKIPPED = "skipped"
+
+
 class SemanticAssessmentStatus(StrEnum):
     """Whether an optional semantic provider changed or retained the base assessment."""
 
@@ -78,6 +89,31 @@ class SemanticEvidence:
     label: str
     score: float | None = None
     text: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class IntelligenceStageTrace:
+    """One safe provider-stage record; it contains no private corpus text."""
+
+    stage: str
+    status: IntelligenceTraceStatus
+    prior_role_level: str
+    resulting_role_level: str
+    promotion_occurred: bool
+    confidence: float | None = None
+    model: str | None = None
+    fallback_reason: str | None = None
+    error_category: str | None = None
+    tool_names: tuple[str, ...] = ()
+    retrieval_count: int = 0
+    source_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class IntelligenceTrace:
+    """Ordered intelligence provenance attached to an assessment diagnostically."""
+
+    stages: tuple[IntelligenceStageTrace, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,3 +195,4 @@ class LanguageAssessment:
     required_languages: tuple[str, ...]
     reasons: tuple[str, ...]
     warnings: tuple[str, ...] = ()
+    mandatory_language_groups: tuple[tuple[str, ...], ...] = ()

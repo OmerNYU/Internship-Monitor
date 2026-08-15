@@ -129,3 +129,37 @@ class EligibilityAnalysisTests(TestCase):
 
         self.assertEqual(english_only.status, LanguageStatus.COMPATIBLE)
         self.assertEqual(french_required.status, LanguageStatus.INCOMPATIBLE)
+
+    def test_city_only_bangalore_aliases_are_profile_driven(self) -> None:
+        strategy = self.configuration.regional_strategy.model_copy(
+            update={"hard_excluded_countries": ("India",)}
+        )
+        for city in ("Bangalore", "Bengaluru"):
+            with self.subTest(city=city):
+                assessment = assess_location(
+                    job(location=city, description="Internship."), strategy
+                )
+                self.assertEqual(assessment.status, LocationStatus.HARD_EXCLUDED_COUNTRY)
+                self.assertEqual(assessment.country, "India")
+
+    def test_coordinated_mandatory_languages_require_one_supported_option_per_group(self) -> None:
+        assessment = assess_language(
+            job(
+                location="Amsterdam, Netherlands",
+                description="Applicants must be fluent in English and Dutch and/or French.",
+            ),
+            self.configuration.language_profile,
+        )
+        optional = assess_language(
+            job(
+                location="Amsterdam, Netherlands",
+                description="Dutch or French is preferred but not required. English accepted.",
+            ),
+            self.configuration.language_profile,
+        )
+        self.assertEqual(assessment.status, LanguageStatus.INCOMPATIBLE)
+        self.assertEqual(
+            assessment.mandatory_language_groups,
+            (("English",), ("Dutch", "French")),
+        )
+        self.assertEqual(optional.status, LanguageStatus.COMPATIBLE)

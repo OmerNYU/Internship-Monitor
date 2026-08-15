@@ -194,6 +194,12 @@ COUNTRY_ALIASES = {
     "viet nam": "Vietnam",
 }
 
+# City aliases support city-only listing locations without embedding user profile policy.
+CITY_COUNTRY_ALIASES = {
+    "bangalore": "India",
+    "bengaluru": "India",
+}
+
 
 def _normalize(value: str) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", value.casefold()).split())
@@ -218,7 +224,11 @@ def country_from_location(location: str | None) -> str | None:
     if location is None:
         return None
     normalized_location = f" {_normalize(location)} "
-    aliases = {**{country: country for country in REGION_BY_COUNTRY}, **COUNTRY_ALIASES}
+    aliases = {
+        **{country: country for country in REGION_BY_COUNTRY},
+        **COUNTRY_ALIASES,
+        **CITY_COUNTRY_ALIASES,
+    }
     matches = [alias for alias in aliases if f" {alias} " in normalized_location]
     if not matches:
         return None

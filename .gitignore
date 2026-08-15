@@ -15,6 +15,7 @@ build/
 .env.*
 !.env.example
 config.local/
+evaluation.local/
 /state/
 *.sqlite
 *.sqlite3

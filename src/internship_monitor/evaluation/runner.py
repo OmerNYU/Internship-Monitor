@@ -45,6 +45,16 @@ class CaseEvaluation:
     semantic_fallback_reason: str | None = None
     agent_tool_calls: tuple[str, ...] = ()
     agent_tool_call_count: int = 0
+    trace_stages: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderStageMetric:
+    """Aggregate safe stage outcome count for later provider comparisons."""
+
+    stage: str
+    status: str
+    count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +103,7 @@ class EvaluationReport:
     categorical_metrics: tuple[CategoricalMetric, ...]
     hard_blocker_metrics: HardBlockerMetrics
     expected_retained_incorrectly_blocked: int
+    provider_stage_metrics: tuple[ProviderStageMetric, ...] = ()
 
     @property
     def mismatch_count(self) -> int:
@@ -161,6 +172,7 @@ def evaluate_gold_cases(
     false_positives = 0
     false_negatives = 0
     field_matches = {field: 0 for field in _FIELDS}
+    stage_counts: dict[tuple[str, str], int] = {}
 
     for case in cases:
         expected = decision_vector_from_gold(case.expected)
@@ -180,6 +192,9 @@ def evaluate_gold_cases(
         false_negatives += len(expected_blockers - actual_blockers)
         for field in _FIELDS:
             field_matches[field] += getattr(expected, field) == getattr(actual, field)
+        for stage in assessment.intelligence_trace.stages:
+            key = (stage.stage, stage.status.value)
+            stage_counts[key] = stage_counts.get(key, 0) + 1
         evaluations.append(
             CaseEvaluation(
                 case_id=case.case_id,
@@ -226,6 +241,10 @@ def evaluate_gold_cases(
         expected_retained_incorrectly_blocked=sum(
             evaluation.expected_retained_incorrectly_blocked for evaluation in evaluations
         ),
+        provider_stage_metrics=tuple(
+            ProviderStageMetric(stage, status, count)
+            for (stage, status), count in sorted(stage_counts.items())
+        ),
     )
 
 
@@ -249,6 +268,12 @@ def format_evaluation_report(report: EvaluationReport) -> str:
         f"precision={blockers.precision:.0%}, recall={blockers.recall:.0%}, f1={blockers.f1:.0%}.",
         f"Categorical accuracy: {metrics}.",
     ]
+    if report.provider_stage_metrics:
+        outcomes = ", ".join(
+            f"{metric.stage}:{metric.status}={metric.count}"
+            for metric in report.provider_stage_metrics
+        )
+        lines.append(f"Provider stages: {outcomes}.")
     semantic_cases = tuple(case for case in report.cases if case.semantic_status is not None)
     if semantic_cases:
         statuses = {case.semantic_status for case in semantic_cases if case.semantic_status}
