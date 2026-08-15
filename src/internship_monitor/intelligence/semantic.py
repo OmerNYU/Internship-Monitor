@@ -122,6 +122,7 @@ class EmbeddingAssessmentProvider:
             fallback_reason=semantic.fallback_reason,
             error_category=semantic.error_category,
             invoked=semantic.invoked,
+            diagnostic_fields=semantic.diagnostic_fields,
         )
 
     def _assess(self, listing: JobListing) -> JobAssessment:
@@ -209,6 +210,13 @@ class EmbeddingAssessmentProvider:
             review_threshold=self._configuration.intelligence.embedding.review_similarity,
             relevant_threshold=self._configuration.intelligence.embedding.relevant_similarity,
         )
+        diagnostic_fields = (
+            ("best_archetype", best_archetype.category),
+            ("best_similarity", round(best_similarity, 6)),
+            ("review_threshold", self._configuration.intelligence.embedding.review_similarity),
+            ("relevant_threshold", self._configuration.intelligence.embedding.relevant_similarity),
+            ("candidate_role_level", target_level.value if target_level is not None else None),
+        )
         if target_level is None:
             return replace(
                 assessment,
@@ -220,6 +228,7 @@ class EmbeddingAssessmentProvider:
                         "Embedding similarity did not reach the configured review threshold."
                     ),
                     invoked=invoked,
+                    diagnostic_fields=diagnostic_fields,
                 ),
             )
         role = RoleAssessment(
@@ -241,6 +250,7 @@ class EmbeddingAssessmentProvider:
             proposed_role_level=target_level,
             evidence=evidence,
             invoked=invoked,
+            diagnostic_fields=diagnostic_fields,
         )
         return _rescore(assessment, role, semantic)
 
@@ -302,6 +312,7 @@ def _semantic(
     fallback_reason: str | None = None,
     error_category: str | None = None,
     invoked: bool = False,
+    diagnostic_fields: tuple[tuple[str, str | int | float | bool | None], ...] = (),
 ) -> SemanticAssessment:
     return SemanticAssessment(
         provider=EmbeddingAssessmentProvider.name,
@@ -312,4 +323,5 @@ def _semantic(
         fallback_reason=fallback_reason,
         error_category=error_category,
         invoked=invoked,
+        diagnostic_fields=diagnostic_fields,
     )

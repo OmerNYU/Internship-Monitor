@@ -333,34 +333,45 @@ def _validate_verdict(
     current_level: RoleMatchLevel,
     configuration: SearchConfiguration,
 ) -> None:
+    evidence_grounded = _evidence_is_grounded(verdict.evidence, listing)
+    diagnostic = (
+        ("proposed_role_level", verdict.role_level.value),
+        ("confidence", verdict.confidence),
+        ("evidence_grounded", evidence_grounded),
+    )
     if verdict.confidence < configuration.intelligence.structured_assessment.minimum_confidence:
         raise StructuredAssessmentError(
             "structured assessment confidence is below the configured minimum",
             ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
-            (("policy_validation_success", False), ("policy_rejection", "confidence")),
+            (*diagnostic, ("policy_validation_success", False), ("policy_rejection", "confidence")),
         )
     if verdict.role_level not in {RoleMatchLevel.REVIEW, RoleMatchLevel.RELEVANT}:
         raise StructuredAssessmentError(
             "structured assessment must propose review or relevant only",
             ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
-            (("policy_validation_success", False), ("policy_rejection", "role_level")),
+            (*diagnostic, ("policy_validation_success", False), ("policy_rejection", "role_level")),
         )
     if _level_rank(verdict.role_level) <= _level_rank(current_level):
         raise StructuredAssessmentError(
             "structured assessment may only promote the prior role level",
             ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
-            (("policy_validation_success", False), ("policy_rejection", "not_promotion")),
+            (
+                *diagnostic,
+                ("policy_validation_success", False),
+                ("policy_rejection", "not_promotion"),
+            ),
         )
-    source_text = f"{listing.title}\n{listing.description}".casefold()
-    if any(
-        not evidence.strip() or evidence.casefold() not in source_text
-        for evidence in verdict.evidence
-    ):
+    if not evidence_grounded:
         raise StructuredAssessmentError(
             "structured assessment evidence is not grounded in the listing",
             ProviderFailureCategory.EVIDENCE_GROUNDING_FAILURE,
-            (("policy_validation_success", False), ("evidence_grounded", False)),
+            (*diagnostic, ("policy_validation_success", False)),
         )
+
+
+def _evidence_is_grounded(evidence: tuple[str, ...], listing: JobListing) -> bool:
+    source_text = f"{listing.title}\n{listing.description}".casefold()
+    return all(item.strip() and item.casefold() in source_text for item in evidence)
 
 
 def _level_rank(level: RoleMatchLevel) -> int:

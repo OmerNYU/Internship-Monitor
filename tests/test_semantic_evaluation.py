@@ -274,6 +274,8 @@ class SemanticEvaluationTests(TestCase):
             actual.semantic.error_category,
             ProviderFailureCategory.EVIDENCE_GROUNDING_FAILURE.value,
         )
+        self.assertIn(("proposed_role_level", "relevant"), actual.semantic.diagnostic_fields)
+        self.assertIn(("evidence_grounded", False), actual.semantic.diagnostic_fields)
 
     def test_structured_policy_rejection_preserves_deterministic_assessment(self) -> None:
         configuration = self._enabled_configuration()

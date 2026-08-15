@@ -250,11 +250,25 @@ class AgenticAdjudicationProvider:
         contexts: tuple[RetrievedContext, ...] = ()
         try:
             verdict, calls, contexts = self._client.adjudicate(listing, assessment, self._retriever)
+            evidence_grounded = _evidence_is_grounded(verdict.evidence, listing)
+            citation_grounded = set(verdict.context_ids).issubset(
+                {item.document_id for item in contexts}
+            )
+            diagnostic = (
+                ("proposed_role_level", verdict.role_level.value),
+                ("confidence", verdict.confidence),
+                ("evidence_grounded", evidence_grounded),
+                ("citation_grounded", citation_grounded),
+            )
             if verdict.confidence < self._configuration.intelligence.agent.minimum_confidence:
                 raise AgentError(
                     "agent confidence is below the configured minimum",
                     ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
-                    (("policy_validation_success", False), ("policy_rejection", "confidence")),
+                    (
+                        *diagnostic,
+                        ("policy_validation_success", False),
+                        ("policy_rejection", "confidence"),
+                    ),
                 )
             if verdict.role_level not in {
                 RoleMatchLevel.REVIEW,
@@ -263,7 +277,11 @@ class AgenticAdjudicationProvider:
                 raise AgentError(
                     "agent may only make a role promotion",
                     ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
-                    (("policy_validation_success", False), ("policy_rejection", "not_promotion")),
+                    (
+                        *diagnostic,
+                        ("policy_validation_success", False),
+                        ("policy_rejection", "not_promotion"),
+                    ),
                 )
             _validate_verdict(verdict, listing, contexts)
             evidence = (
@@ -317,6 +335,11 @@ class AgenticAdjudicationProvider:
                     ),
                 ),
             )
+
+
+def _evidence_is_grounded(evidence: tuple[str, ...], listing: JobListing) -> bool:
+    source_text = f"{listing.title}\n{listing.description}".casefold()
+    return all(item.strip() and item.casefold() in source_text for item in evidence)
 
 
 def _validate_verdict(
