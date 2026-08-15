@@ -26,6 +26,7 @@ from internship_monitor.intelligence import (
     StructuredRoleVerdict,
     cosine_similarity,
 )
+from internship_monitor.intelligence.failures import ProviderFailureCategory
 
 PROJECT_ROOT = Path(__file__).parents[1]
 FIXTURE = PROJECT_ROOT / "evaluation" / "gold.example.v1.jsonl"
@@ -269,6 +270,44 @@ class SemanticEvaluationTests(TestCase):
         self.assertEqual(actual.role, expected.role)
         assert actual.semantic is not None
         self.assertEqual(actual.semantic.status, SemanticAssessmentStatus.FALLBACK)
+        self.assertEqual(
+            actual.semantic.error_category,
+            ProviderFailureCategory.EVIDENCE_GROUNDING_FAILURE.value,
+        )
+
+    def test_structured_policy_rejection_preserves_deterministic_assessment(self) -> None:
+        configuration = self._enabled_configuration()
+        baseline = DeterministicAssessor(configuration)
+        listing = load_gold_cases(FIXTURE)[0].listing.model_copy(
+            update={
+                "source_job_id": "structured-policy",
+                "title": "Platform Discovery Intern",
+                "description": "Student internship building Python developer tooling and APIs.",
+            }
+        )
+
+        class NonPromotionClient:
+            def assess(self, _: object) -> StructuredRoleVerdict:
+                return StructuredRoleVerdict(
+                    role_level=RoleMatchLevel.NOT_RELEVANT,
+                    confidence=0.95,
+                    evidence=("Python developer tooling",),
+                )
+
+        actual = StructuredLLMAssessmentProvider(
+            configuration,
+            baseline=baseline,
+            client=NonPromotionClient(),
+        ).assess(listing)
+        expected = baseline.assess(listing)
+
+        self.assertEqual(actual.role, expected.role)
+        assert actual.semantic is not None
+        self.assertEqual(actual.semantic.status, SemanticAssessmentStatus.FALLBACK)
+        self.assertEqual(
+            actual.semantic.error_category,
+            ProviderFailureCategory.SEMANTIC_POLICY_REJECTED.value,
+        )
 
     def test_structured_provider_promotes_and_skips_hard_blocked_listings(self) -> None:
         configuration = self._enabled_configuration()

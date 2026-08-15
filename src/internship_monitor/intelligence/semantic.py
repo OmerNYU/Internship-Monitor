@@ -29,6 +29,7 @@ from internship_monitor.intelligence.embeddings import (
     OllamaEmbeddingClient,
     cached_embeddings,
 )
+from internship_monitor.intelligence.failures import failure_category
 from internship_monitor.models import JobListing
 
 
@@ -77,9 +78,10 @@ def cosine_similarity(left: tuple[float, ...], right: tuple[float, ...]) -> floa
     )
     if denominator == 0:
         raise EmbeddingProviderError("embedding vectors must not have zero magnitude")
-    return sum(
-        left_item * right_item for left_item, right_item in zip(left, right, strict=True)
-    ) / (denominator)
+    return (
+        sum(left_item * right_item for left_item, right_item in zip(left, right, strict=True))
+        / denominator
+    )
 
 
 class EmbeddingAssessmentProvider:
@@ -112,10 +114,14 @@ class EmbeddingAssessmentProvider:
         return append_intelligence_stage(
             result,
             stage=IntelligenceStage.EMBEDDING,
-            status=trace_status_from_semantic(semantic.status.value, semantic.fallback_reason),
+            status=trace_status_from_semantic(
+                semantic.status.value, semantic.fallback_reason, semantic.error_category
+            ),
             prior_role_level=semantic.original_role_level,
             model=self._configuration.intelligence.embedding.model,
             fallback_reason=semantic.fallback_reason,
+            error_category=semantic.error_category,
+            invoked=semantic.invoked,
         )
 
     def _assess(self, listing: JobListing) -> JobAssessment:
@@ -155,16 +161,16 @@ class EmbeddingAssessmentProvider:
                     cache=cache,
                     embed=self._client.embed,
                 )
-            return self._assessment_with_similarity(assessment, vectors)
+            return self._assessment_with_similarity(assessment, vectors, invoked=True)
         except (EmbeddingProviderError, OSError, sqlite3.Error) as error:
             return replace(
                 assessment,
                 semantic=_semantic(
                     SemanticAssessmentStatus.FALLBACK,
                     assessment,
-                    fallback_reason=(
-                        f"Embedding assessment fell back to deterministic output: {error}"
-                    ),
+                    fallback_reason="Embedding assessment retained deterministic output.",
+                    error_category=failure_category(error).value,
+                    invoked=True,
                 ),
             )
 
@@ -172,6 +178,8 @@ class EmbeddingAssessmentProvider:
         self,
         assessment: JobAssessment,
         vectors: tuple[tuple[float, ...], ...],
+        *,
+        invoked: bool,
     ) -> JobAssessment:
         if not self._archetypes:
             return replace(
@@ -182,6 +190,7 @@ class EmbeddingAssessmentProvider:
                     fallback_reason=(
                         "No configured role archetypes are available for semantic comparison."
                     ),
+                    invoked=invoked,
                 ),
             )
         job_vector, *archetype_vectors = vectors
@@ -210,6 +219,7 @@ class EmbeddingAssessmentProvider:
                     fallback_reason=(
                         "Embedding similarity did not reach the configured review threshold."
                     ),
+                    invoked=invoked,
                 ),
             )
         role = RoleAssessment(
@@ -230,6 +240,7 @@ class EmbeddingAssessmentProvider:
             assessment,
             proposed_role_level=target_level,
             evidence=evidence,
+            invoked=invoked,
         )
         return _rescore(assessment, role, semantic)
 
@@ -289,6 +300,8 @@ def _semantic(
     proposed_role_level: RoleMatchLevel | None = None,
     evidence: tuple[SemanticEvidence, ...] = (),
     fallback_reason: str | None = None,
+    error_category: str | None = None,
+    invoked: bool = False,
 ) -> SemanticAssessment:
     return SemanticAssessment(
         provider=EmbeddingAssessmentProvider.name,
@@ -297,4 +310,6 @@ def _semantic(
         proposed_role_level=proposed_role_level.value if proposed_role_level is not None else None,
         evidence=evidence,
         fallback_reason=fallback_reason,
+        error_category=error_category,
+        invoked=invoked,
     )

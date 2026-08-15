@@ -45,3 +45,16 @@ The JSON report includes per-case semantic provider status and fallback reason w
 the listing description. Benchmark output is diagnostic: Session 27 will calibrate comparative
 quality thresholds. Before proceeding between sessions, require zero expected-retained cases
 incorrectly blocked.
+
+## Session 27.3 local-provider diagnostics
+
+`intelligence-status --probe` is an explicit read-only health and smoke command. It bypasses the
+profile's runtime enable flags only for its local diagnostic calls; it does not persist configuration,
+change monitoring, or write an embedding cache. It reports only version/model presence, typed failure
+categories, vector dimensions, schema success, latency, tool names, retrieval counts, and retrieved document
+IDs. It never emits prompts, listing descriptions, model output, corpus excerpts, or exception bodies.
+
+`evaluate --human-gold --ablation --exercise-providers` creates an in-memory enabled copy of the configured
+local intelligence settings solely for that ablation invocation. The normal runtime gates, hard blockers, and
+all profile files remain unchanged. A missing private RAG index is reported as unavailable; build it manually
+with the existing `rag-index` command before asking the agent/RAG probe to run.

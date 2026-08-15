@@ -73,14 +73,30 @@ class IntelligenceProviderTests(TestCase):
         self.assertEqual(unavailable_health.status, ProviderHealthStatus.UNAVAILABLE)
         self.assertEqual(malformed_health.status, ProviderHealthStatus.UNAVAILABLE)
 
-    def test_ollama_configuration_requires_a_local_http_origin(self) -> None:
+    def test_ollama_configuration_accepts_local_loopback_and_private_ip_origins(self) -> None:
+        for base_url in (
+            "http://localhost:11434",
+            "http://127.0.0.1:11434",
+            "http://[::1]:11434",
+            "http://172.25.112.1:11435",
+            "http://192.168.1.10:11434",
+            "http://10.0.0.5:11434",
+        ):
+            with self.subTest(base_url=base_url):
+                self.assertEqual(OllamaConfiguration(base_url=base_url).base_url, base_url)
+
+    def test_ollama_configuration_rejects_non_local_or_non_origin_urls(self) -> None:
         for base_url in (
             "https://ollama.com",
+            "http://8.8.8.8:11434",
             "http://example.com:11434",
-            "http://localhost:11434/api",
-            "http://user:password@localhost:11434",
+            "http://user:password@127.0.0.1:11434",
+            "http://127.0.0.1:11434/api",
+            "http://127.0.0.1:11434?probe=true",
+            "http://127.0.0.1:11434#fragment",
+            "http://[::1",
         ):
-            with self.assertRaises(ValidationError):
+            with self.subTest(base_url=base_url), self.assertRaises(ValidationError):
                 OllamaConfiguration(base_url=base_url)
 
     def test_cli_reports_disabled_intelligence_without_contacting_ollama(self) -> None:

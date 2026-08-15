@@ -25,9 +25,11 @@ class ProviderTraceSummary:
     status: str
     model: str | None
     error_category: str | None
+    invoked: bool
     tool_names: tuple[str, ...]
     tool_call_count: int
     retrieval_count: int
+    diagnostic_fields: tuple[tuple[str, str | int | float | bool | None], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +87,18 @@ class ProviderEffects:
 
 
 @dataclass(frozen=True, slots=True)
+class ProviderExecutionMetrics:
+    """Observed provider-stage execution, separate from semantic and safety outcomes."""
+
+    stage: str
+    attempted: int
+    succeeded: int
+    skipped: int
+    fallback: int
+    failure_categories: tuple[tuple[str, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ProviderAblation:
     provider: str
     cases: tuple[AblationCaseOutcome, ...]
@@ -106,6 +120,7 @@ class ProviderAblation:
     final_opportunity: RelevanceMetrics | None = None
     safety: SafetyMetrics | None = None
     provider_effects: ProviderEffects | None = None
+    execution: tuple[ProviderExecutionMetrics, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +281,7 @@ def format_ablation_markdown(report: AblationReport) -> str:
                 f"{', '.join(effects.final_beneficial_changes) or 'none'}",
                 f"- Harmful final changes: {', '.join(effects.final_harmful_changes) or 'none'}",
                 f"- Stage health: {_fmt_stages(item.stage_statuses)}",
+                f"- Execution: {_fmt_execution(item.execution)}",
                 f"- Error categories: {_fmt_counts(item.error_categories)}",
                 f"- Tool metrics: {_fmt_counts(item.tool_metrics)}",
                 (
@@ -360,9 +376,11 @@ def _outcome(case: HumanGoldCase, assessment: JobAssessment, elapsed: float) -> 
                 stage.status.value,
                 stage.model,
                 stage.error_category,
+                stage.invoked,
                 stage.tool_names,
                 len(stage.tool_names),
                 stage.retrieval_count,
+                stage.diagnostic_fields,
             )
             for stage in assessment.intelligence_trace.stages
         ),
@@ -453,6 +471,7 @@ def _aggregate(
         ),
     )
     effects = _provider_effects(outcomes, baseline)
+    execution = _execution_metrics(outcomes)
     categorized = _with_difference_categories(outcomes, semantic, final, safety, effects)
 
     # Preserve the pre-27.2d schema semantics exactly: ``relevant_recall``
@@ -513,7 +532,37 @@ def _aggregate(
         final,
         safety,
         effects,
+        execution,
     )
+
+
+def _execution_metrics(
+    outcomes: tuple[AblationCaseOutcome, ...],
+) -> tuple[ProviderExecutionMetrics, ...]:
+    stages = sorted({trace.stage for outcome in outcomes for trace in outcome.trace})
+    metrics: list[ProviderExecutionMetrics] = []
+    for stage in stages:
+        traces = tuple(
+            trace for outcome in outcomes for trace in outcome.trace if trace.stage == stage
+        )
+        failures = Counter(
+            trace.error_category for trace in traces if trace.error_category is not None
+        )
+        metrics.append(
+            ProviderExecutionMetrics(
+                stage=stage,
+                attempted=sum(trace.invoked for trace in traces),
+                succeeded=sum(trace.invoked and trace.error_category is None for trace in traces),
+                skipped=sum(not trace.invoked and trace.status == "skipped" for trace in traces),
+                fallback=sum(
+                    trace.invoked and trace.error_category is not None for trace in traces
+                ),
+                failure_categories=tuple(
+                    sorted((str(kind), count) for kind, count in failures.items())
+                ),
+            )
+        )
+    return tuple(metrics)
 
 
 def _relevance_metrics(
@@ -825,6 +874,17 @@ def _fmt_counts(values: tuple[tuple[str, int], ...]) -> str:
 
 def _fmt_stages(values: tuple[tuple[str, str, int], ...]) -> str:
     return ", ".join(f"{stage}:{status}={count}" for stage, status, count in values) or "none"
+
+
+def _fmt_execution(values: tuple[ProviderExecutionMetrics, ...]) -> str:
+    return (
+        "; ".join(
+            f"{item.stage}: attempted={item.attempted}, succeeded={item.succeeded}, "
+            f"skipped={item.skipped}, fallback={item.fallback}"
+            for item in values
+        )
+        or "none"
+    )
 
 
 def _fmt_agreement(values: tuple[tuple[str, int, int], ...]) -> str:

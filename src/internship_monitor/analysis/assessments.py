@@ -104,9 +104,11 @@ class IntelligenceStageTrace:
     model: str | None = None
     fallback_reason: str | None = None
     error_category: str | None = None
+    invoked: bool = False
     tool_names: tuple[str, ...] = ()
     retrieval_count: int = 0
     source_ids: tuple[str, ...] = ()
+    diagnostic_fields: tuple[tuple[str, str | int | float | bool | None], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +129,9 @@ class SemanticAssessment:
     evidence: tuple[SemanticEvidence, ...] = ()
     warnings: tuple[str, ...] = ()
     fallback_reason: str | None = None
+    error_category: str | None = None
+    invoked: bool = False
+    diagnostic_fields: tuple[tuple[str, str | int | float | bool | None], ...] = ()
 
 
 class GraduationStatus(StrEnum):

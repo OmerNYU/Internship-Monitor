@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import json
 from collections.abc import Sequence
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -47,6 +48,7 @@ from internship_monitor.intelligence import (
     ProviderHealthStatus,
     StructuredLLMAssessmentProvider,
     build_corpus_index,
+    probe_intelligence,
     provider_from_configuration,
 )
 from internship_monitor.notifications import (
@@ -188,6 +190,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate_parser.add_argument("--rag-index", type=Path, default=Path("state/rag.sqlite3"))
     evaluate_parser.add_argument(
+        "--case-id",
+        help=(
+            "Run one human-gold case through one provider and emit "
+            "safe evaluation-only diagnostics."
+        ),
+    )
+    evaluate_parser.add_argument(
         "--json",
         action="store_true",
         dest="json_output",
@@ -197,6 +206,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--ablation",
         action="store_true",
         help="Compare deterministic and available intelligence providers over human-gold cases.",
+    )
+    evaluate_parser.add_argument(
+        "--exercise-providers",
+        action="store_true",
+        help=(
+            "Evaluation-only opt-in that enables configured local providers in memory for ablation."
+        ),
     )
     evaluate_parser.add_argument(
         "--output", type=Path, default=Path("evaluation.local/session27_ablation.json")
@@ -238,6 +254,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="json_output",
         help="Render the local health result as JSON.",
+    )
+    intelligence_parser.add_argument(
+        "--probe",
+        action="store_true",
+        help="Run explicit read-only model and agent/RAG smoke probes without enabling monitoring.",
+    )
+    intelligence_parser.add_argument("--rag-index", type=Path, default=Path("state/rag.sqlite3"))
+    intelligence_parser.add_argument(
+        "--rag-corpus-dir", type=Path, default=Path("config.local/rag")
     )
     rag_index_parser = subparsers.add_parser("rag-index")
     rag_index_parser.add_argument(
@@ -386,6 +411,29 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _intelligence_status_command(args: argparse.Namespace) -> int:
     configuration = load_search_configuration(args.profile)
+    if args.probe:
+        report = probe_intelligence(
+            configuration,
+            rag_index_path=args.rag_index,
+            rag_corpus_dir=args.rag_corpus_dir,
+        )
+        if args.json_output:
+            print(json.dumps(asdict(report), indent=2, sort_keys=True))
+        else:
+            embedding_state = (
+                "ok" if report.embedding.succeeded else report.embedding.error_category
+            )
+            structured_state = (
+                "ok" if report.structured_llm.succeeded else report.structured_llm.error_category
+            )
+            agent_state = "ok" if report.agent.succeeded else report.agent.error_category
+            rag_state = "available" if report.rag_index_available else "missing"
+            print(
+                f"Intelligence probe: ollama={report.ollama.status.value}, "
+                f"embedding={embedding_state}, structured_llm={structured_state}, "
+                f"agent={agent_state}, rag_index={rag_state}."
+            )
+        return 0 if report.ollama.is_available else 1
     health = provider_from_configuration(configuration.intelligence).health()
     if args.json_output:
         print(
@@ -418,10 +466,20 @@ def _evaluate_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
     except GoldDatasetError as error:
         parser.error(str(error))
     configuration = load_search_configuration(args.profile)
+    if args.exercise_providers and not (args.ablation or args.case_id):
+        parser.error("--exercise-providers requires --ablation or --case-id")
+    if args.case_id and args.ablation:
+        parser.error("--case-id cannot be used with --ablation")
+    if args.case_id and not args.human_gold:
+        parser.error("--case-id requires --human-gold")
+    if args.case_id and args.exercise_providers:
+        configuration = _evaluation_intelligence_configuration(configuration)
     if args.ablation:
         if not args.human_gold:
             parser.error("--ablation requires --human-gold")
         assert human_cases is not None
+        if args.exercise_providers:
+            configuration = _evaluation_intelligence_configuration(configuration)
         ablation_report = _run_human_gold_ablation(human_cases, configuration, args)
         write_ablation_artifacts(ablation_report, args.output, args.report)
         print(
@@ -454,6 +512,43 @@ def _evaluate_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
                     embedding_cache_path=args.embedding_cache,
                 ),
             )
+    if args.case_id:
+        assert human_cases is not None
+        case = next((item for item in human_cases if item.case_id == args.case_id), None)
+        if case is None:
+            parser.error(f"case ID not found in dataset: {args.case_id}")
+        assessment = provider.assess(case.listing)
+        payload = {
+            "case_id": case.case_id,
+            "company": case.listing.company,
+            "title": case.listing.title,
+            "provider": provider.name,
+            "role_level": assessment.role.level.value,
+            "hard_blocked": assessment.is_hard_blocked,
+            "stages": [
+                {
+                    "stage": stage.stage,
+                    "status": stage.status.value,
+                    "prior_role_level": stage.prior_role_level,
+                    "resulting_role_level": stage.resulting_role_level,
+                    "invoked": stage.invoked,
+                    "error_category": stage.error_category,
+                    "tool_names": stage.tool_names,
+                    "retrieval_count": stage.retrieval_count,
+                    "source_ids": stage.source_ids,
+                    "diagnostic_fields": dict(stage.diagnostic_fields),
+                }
+                for stage in assessment.intelligence_trace.stages
+            ],
+        }
+        if args.json_output:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(
+                f"Case diagnostic: case_id={case.case_id}, provider={provider.name}, "
+                f"role={assessment.role.level.value}, hard_blocked={assessment.is_hard_blocked}."
+            )
+        return 0
     if args.human_gold:
         assert human_cases is not None
         human_report = evaluate_human_gold_cases(human_cases, provider)
@@ -469,6 +564,17 @@ def _evaluate_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         else:
             print(format_evaluation_report(report))
     return 0
+
+
+def _evaluation_intelligence_configuration(
+    configuration: SearchConfiguration,
+) -> SearchConfiguration:
+    """Enable configured local providers only in an immutable evaluation-local copy."""
+    intelligence = configuration.intelligence
+    agent = intelligence.agent.model_copy(update={"enabled": True})
+    return configuration.model_copy(
+        update={"intelligence": intelligence.model_copy(update={"enabled": True, "agent": agent})}
+    )
 
 
 def _run_human_gold_ablation(

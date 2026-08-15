@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from ipaddress import ip_address
 from typing import Annotated, Self
 from urllib.parse import urlparse
 
@@ -172,10 +173,23 @@ class OllamaConfiguration(StrictConfigModel):
 
     @model_validator(mode="after")
     def require_local_http_endpoint(self) -> Self:
-        parsed = urlparse(self.base_url)
+        try:
+            parsed = urlparse(self.base_url)
+            hostname = parsed.hostname
+            _ = parsed.port
+            if hostname == "localhost":
+                is_local_address = True
+            elif hostname is None:
+                is_local_address = False
+            else:
+                address = ip_address(hostname)
+                is_local_address = address.is_loopback or address.is_private
+        except ValueError:
+            is_local_address = False
+            parsed = urlparse(self.base_url)
         if (
             parsed.scheme != "http"
-            or parsed.hostname not in {"127.0.0.1", "::1", "localhost"}
+            or not is_local_address
             or parsed.path not in {"", "/"}
             or parsed.params
             or parsed.query

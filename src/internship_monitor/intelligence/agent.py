@@ -26,6 +26,13 @@ from internship_monitor.analysis.trace import (
     trace_status_from_semantic,
 )
 from internship_monitor.config import SearchConfiguration
+from internship_monitor.intelligence.failures import (
+    ProviderFailure,
+    ProviderFailureCategory,
+    SafeDiagnosticFields,
+    failure_category,
+    merge_diagnostic_fields,
+)
 from internship_monitor.intelligence.rag import CorpusKind, RagRetriever, RetrievedContext
 from internship_monitor.intelligence.semantic import _rescore
 from internship_monitor.intelligence.structured import (
@@ -36,7 +43,7 @@ from internship_monitor.intelligence.structured import (
 from internship_monitor.models import JobListing
 
 
-class AgentError(RuntimeError):
+class AgentError(ProviderFailure):
     """The bounded local tool loop could not safely produce an adjudication."""
 
 
@@ -62,11 +69,34 @@ class OllamaAdjudicationClient:
     ) -> None:
         self._configuration = configuration
         self._transport = transport
+        self._last_diagnostic: SafeDiagnosticFields = ()
+
+    @property
+    def last_diagnostic(self) -> SafeDiagnosticFields:
+        """Return fixed safe measurements from the latest native agent response."""
+        return self._last_diagnostic
 
     def adjudicate(
-        self, listing: JobListing, assessment: JobAssessment, retriever: RagRetriever
+        self,
+        listing: JobListing,
+        assessment: JobAssessment,
+        retriever: RagRetriever,
+        *,
+        force_retrieval: bool = False,
     ) -> tuple[AgentRoleVerdict, tuple[str, ...], tuple[RetrievedContext, ...]]:
-        messages: list[dict[str, object]] = [{"role": "user", "content": listing.title}]
+        instruction = (
+            "Before returning a final assessment, use the supplied read-only tools to retrieve "
+            "relevant context. After tool results are available, return the schema-valid answer."
+        )
+        if force_retrieval:
+            instruction = (
+                "For this evaluation-only probe, call retrieve_role_archetypes before returning "
+                "the schema-valid answer."
+            )
+        messages: list[dict[str, object]] = [
+            {"role": "system", "content": instruction},
+            {"role": "user", "content": listing.title},
+        ]
         calls: list[str] = []
         contexts: list[RetrievedContext] = []
         with httpx.Client(
@@ -76,21 +106,40 @@ class OllamaAdjudicationClient:
         ) as client:
             _require_model(client, self._configuration.intelligence.agent.model)
             for _ in range(self._configuration.intelligence.agent.max_tool_rounds):
-                response = client.post(
-                    "/api/chat",
-                    json={
-                        "model": self._configuration.intelligence.agent.model,
-                        "messages": messages,
-                        "tools": _tools(),
-                        "format": AgentRoleVerdict.model_json_schema(),
-                        "stream": False,
-                        "think": False,
-                        "options": {"temperature": 0},
-                    },
-                )
+                request: dict[str, object] = {
+                    "model": self._configuration.intelligence.agent.model,
+                    "messages": messages,
+                    "tools": _tools(),
+                    "stream": False,
+                    "think": False,
+                    "options": {"temperature": 0},
+                }
+                # qwen3 on native Ollama returns a schema-constrained final message rather than
+                # a native tool call when format and tools are requested together. Constrain only
+                # the post-tool final response; tool rounds remain native Ollama tool requests.
+                if calls:
+                    request["format"] = AgentRoleVerdict.model_json_schema()
+                response = client.post("/api/chat", json=request)
                 response.raise_for_status()
                 payload = response.json()
                 message = payload.get("message") if isinstance(payload, dict) else None
+                tool_calls = message.get("tool_calls") if isinstance(message, dict) else None
+                self._last_diagnostic = (
+                    ("provider_stage", "agent"),
+                    ("round", _ + 1),
+                    ("message_count", len(messages)),
+                    (
+                        "input_characters",
+                        sum(len(str(item.get("content", ""))) for item in messages),
+                    ),
+                    ("http_status", response.status_code),
+                    ("response_received", True),
+                    (
+                        "content_present",
+                        bool(message.get("content")) if isinstance(message, dict) else False,
+                    ),
+                    ("tool_call_count", len(tool_calls) if isinstance(tool_calls, list) else 0),
+                )
                 if not isinstance(message, dict):
                     raise AgentError("agent response has no message")
                 tool_calls = message.get("tool_calls")
@@ -166,14 +215,23 @@ class AgenticAdjudicationProvider:
             fallback_reason=semantic.fallback_reason
             if rag_status is IntelligenceTraceStatus.UNAVAILABLE
             else None,
+            error_category=semantic.error_category
+            if rag_status is IntelligenceTraceStatus.UNAVAILABLE
+            else None,
+            invoked=bool(source_ids),
         )
         return append_intelligence_stage(
             result,
             stage=IntelligenceStage.AGENT,
-            status=trace_status_from_semantic(semantic.status.value, semantic.fallback_reason),
+            status=trace_status_from_semantic(
+                semantic.status.value, semantic.fallback_reason, semantic.error_category
+            ),
             prior_role_level=semantic.original_role_level,
             model=self._configuration.intelligence.agent.model,
             fallback_reason=semantic.fallback_reason,
+            error_category=semantic.error_category,
+            invoked=semantic.invoked,
+            diagnostic_fields=semantic.diagnostic_fields,
             tool_names=tools,
             retrieval_count=len(source_ids),
             source_ids=source_ids,
@@ -188,15 +246,25 @@ class AgenticAdjudicationProvider:
                     assessment, SemanticAssessmentStatus.FALLBACK, "Agent not eligible or disabled."
                 ),
             )
+        calls: tuple[str, ...] = ()
+        contexts: tuple[RetrievedContext, ...] = ()
         try:
             verdict, calls, contexts = self._client.adjudicate(listing, assessment, self._retriever)
             if verdict.confidence < self._configuration.intelligence.agent.minimum_confidence:
-                raise AgentError("agent confidence is below the configured minimum")
+                raise AgentError(
+                    "agent confidence is below the configured minimum",
+                    ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
+                    (("policy_validation_success", False), ("policy_rejection", "confidence")),
+                )
             if verdict.role_level not in {
                 RoleMatchLevel.REVIEW,
                 RoleMatchLevel.RELEVANT,
             } or _level_rank(verdict.role_level) <= _level_rank(assessment.role.level):
-                raise AgentError("agent may only make a role promotion")
+                raise AgentError(
+                    "agent may only make a role promotion",
+                    ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
+                    (("policy_validation_success", False), ("policy_rejection", "not_promotion")),
+                )
             _validate_verdict(verdict, listing, contexts)
             evidence = (
                 tuple(SemanticEvidence("agent_tool", text=name) for name in calls)
@@ -224,12 +292,30 @@ class AgenticAdjudicationProvider:
                     None,
                     evidence,
                     proposed_role_level=verdict.role_level,
+                    invoked=True,
                 ),
             )
         except (AgentError, StructuredAssessmentError, httpx.HTTPError, ValueError) as error:
             return replace(
                 assessment,
-                semantic=_semantic(assessment, SemanticAssessmentStatus.FALLBACK, str(error)),
+                semantic=_semantic(
+                    assessment,
+                    SemanticAssessmentStatus.FALLBACK,
+                    "Agent retained prior assessment.",
+                    error_category=failure_category(error).value,
+                    invoked=True,
+                    evidence=(
+                        tuple(SemanticEvidence("agent_tool", text=name) for name in calls)
+                        + tuple(
+                            SemanticEvidence(f"context:{item.document_id}", score=item.similarity)
+                            for item in contexts
+                        )
+                    ),
+                    diagnostic_fields=merge_diagnostic_fields(
+                        getattr(self._client, "last_diagnostic", ()),
+                        getattr(error, "diagnostic_fields", ()),
+                    ),
+                ),
             )
 
 
@@ -240,10 +326,18 @@ def _validate_verdict(
 ) -> None:
     source_text = f"{listing.title}\n{listing.description}".casefold()
     if any(not item.strip() or item.casefold() not in source_text for item in verdict.evidence):
-        raise AgentError("agent evidence is not grounded in the listing")
+        raise AgentError(
+            "agent evidence is not grounded in the listing",
+            ProviderFailureCategory.EVIDENCE_GROUNDING_FAILURE,
+            (("policy_validation_success", False), ("evidence_grounded", False)),
+        )
     available_ids = {item.document_id for item in contexts}
     if not set(verdict.context_ids).issubset(available_ids):
-        raise AgentError("agent context citations were not retrieved")
+        raise AgentError(
+            "agent context citations were not retrieved",
+            ProviderFailureCategory.RETRIEVAL_UNAVAILABLE,
+            (("citation_validation_success", False),),
+        )
 
 
 def _eligible(assessment: JobAssessment) -> bool:
@@ -338,6 +432,9 @@ def _semantic(
     evidence: tuple[SemanticEvidence, ...] = (),
     *,
     proposed_role_level: RoleMatchLevel | None = None,
+    error_category: str | None = None,
+    invoked: bool = False,
+    diagnostic_fields: SafeDiagnosticFields = (),
 ) -> SemanticAssessment:
     return SemanticAssessment(
         "agent",
@@ -346,4 +443,7 @@ def _semantic(
         proposed_role_level.value if proposed_role_level is not None else None,
         evidence,
         fallback_reason=reason,
+        error_category=error_category,
+        invoked=invoked,
+        diagnostic_fields=diagnostic_fields,
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import replace
 
 import httpx
@@ -23,11 +24,18 @@ from internship_monitor.analysis.trace import (
 )
 from internship_monitor.config import SearchConfiguration
 from internship_monitor.intelligence.embeddings import EmbeddingProviderError
+from internship_monitor.intelligence.failures import (
+    ProviderFailure,
+    ProviderFailureCategory,
+    SafeDiagnosticFields,
+    failure_category,
+    merge_diagnostic_fields,
+)
 from internship_monitor.intelligence.semantic import _rescore
 from internship_monitor.models import JobListing
 
 
-class StructuredAssessmentError(RuntimeError):
+class StructuredAssessmentError(ProviderFailure):
     """A local structured assessment response could not be accepted safely."""
 
 
@@ -53,9 +61,30 @@ class OllamaStructuredAssessmentClient:
         self._ollama = configuration.intelligence.ollama
         self._settings = configuration.intelligence.structured_assessment
         self._transport = transport
+        self._last_diagnostic: SafeDiagnosticFields = ()
+
+    @property
+    def last_diagnostic(self) -> SafeDiagnosticFields:
+        """Return fixed safe request/response measurements from the latest call."""
+        return self._last_diagnostic
 
     def assess(self, listing: JobListing) -> StructuredRoleVerdict:
         """Request one validated role verdict without model download or streaming."""
+        messages = _messages(listing, self._settings.max_description_characters)
+        fields: dict[str, str | int | float | bool | None] = {
+            "provider_stage": "structured_llm",
+            "request_constructed": True,
+            "message_count": len(messages),
+            "input_characters": sum(len(message["content"]) for message in messages),
+            "http_status": None,
+            "response_received": False,
+            "content_present": False,
+            "output_characters": 0,
+            "json_parse_success": False,
+            "schema_validation_success": False,
+            "policy_validation_success": None,
+        }
+        started = time.perf_counter()
         try:
             with httpx.Client(
                 base_url=self._ollama.base_url,
@@ -67,26 +96,48 @@ class OllamaStructuredAssessmentClient:
                     "/api/chat",
                     json={
                         "model": self._settings.model,
-                        "messages": _messages(listing, self._settings.max_description_characters),
+                        "messages": messages,
                         "format": StructuredRoleVerdict.model_json_schema(),
                         "stream": False,
                         "think": False,
                         "options": {"temperature": 0},
                     },
                 )
+                fields["http_status"] = response.status_code
                 response.raise_for_status()
                 payload = response.json()
+                fields["response_received"] = True
         except (httpx.HTTPError, ValueError) as error:
+            self._last_diagnostic = _diagnostic_fields(fields, started)
             raise StructuredAssessmentError(
-                "local Ollama structured assessment request failed"
+                "local structured request failed",
+                failure_category(error),
+                self._last_diagnostic,
             ) from error
-        content = _content_from(payload)
         try:
-            return StructuredRoleVerdict.model_validate_json(content)
-        except ValidationError as error:
+            content = _content_from(payload)
+        except StructuredAssessmentError as error:
+            self._last_diagnostic = _diagnostic_fields(fields, started)
             raise StructuredAssessmentError(
-                "Ollama structured assessment did not match the schema"
+                "local structured response was malformed",
+                ProviderFailureCategory.MALFORMED_PROVIDER_RESPONSE,
+                self._last_diagnostic,
             ) from error
+        fields["content_present"] = bool(content)
+        fields["output_characters"] = len(content)
+        try:
+            verdict = StructuredRoleVerdict.model_validate_json(content)
+        except ValidationError as error:
+            self._last_diagnostic = _diagnostic_fields(fields, started)
+            raise StructuredAssessmentError(
+                "structured response failed schema validation",
+                ProviderFailureCategory.SCHEMA_VALIDATION_FAILURE,
+                self._last_diagnostic,
+            ) from error
+        fields["json_parse_success"] = True
+        fields["schema_validation_success"] = True
+        self._last_diagnostic = _diagnostic_fields(fields, started)
+        return verdict
 
 
 class StructuredLLMAssessmentProvider:
@@ -113,10 +164,15 @@ class StructuredLLMAssessmentProvider:
         return append_intelligence_stage(
             result,
             stage=IntelligenceStage.STRUCTURED_LLM,
-            status=trace_status_from_semantic(semantic.status.value, semantic.fallback_reason),
+            status=trace_status_from_semantic(
+                semantic.status.value, semantic.fallback_reason, semantic.error_category
+            ),
             prior_role_level=semantic.original_role_level,
             model=self._configuration.intelligence.structured_assessment.model,
             fallback_reason=semantic.fallback_reason,
+            error_category=semantic.error_category,
+            invoked=semantic.invoked,
+            diagnostic_fields=semantic.diagnostic_fields,
         )
 
     def _assess(self, listing: JobListing) -> JobAssessment:
@@ -163,7 +219,13 @@ class StructuredLLMAssessmentProvider:
                 semantic=_semantic(
                     SemanticAssessmentStatus.FALLBACK,
                     assessment,
-                    fallback_reason=f"Structured assessment retained embedding output: {error}",
+                    fallback_reason="Structured assessment retained embedding output.",
+                    error_category=failure_category(error).value,
+                    invoked=True,
+                    diagnostic_fields=merge_diagnostic_fields(
+                        getattr(self._client, "last_diagnostic", ()),
+                        getattr(error, "diagnostic_fields", ()),
+                    ),
                 ),
             )
         role = RoleAssessment(
@@ -187,8 +249,20 @@ class StructuredLLMAssessmentProvider:
                 SemanticEvidence(label="source_grounded_evidence", text=evidence)
                 for evidence in verdict.evidence
             ),
+            invoked=True,
+            diagnostic_fields=merge_diagnostic_fields(
+                getattr(self._client, "last_diagnostic", ()),
+                (("policy_validation_success", True),),
+            ),
         )
         return _rescore(assessment, role, semantic)
+
+
+def _diagnostic_fields(
+    fields: dict[str, str | int | float | bool | None], started: float
+) -> SafeDiagnosticFields:
+    fields["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 3)
+    return tuple(sorted(fields.items()))
 
 
 def _messages(listing: JobListing, max_description_characters: int) -> list[dict[str, str]]:
@@ -216,7 +290,10 @@ def _require_model(client: httpx.Client, model_name: str) -> None:
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, dict) or not isinstance(payload.get("models"), list):
-        raise StructuredAssessmentError("Ollama model-list response is invalid")
+        raise StructuredAssessmentError(
+            "Ollama model-list response is invalid",
+            ProviderFailureCategory.MALFORMED_PROVIDER_RESPONSE,
+        )
     installed = {
         item.get("name", "").strip()
         for item in payload["models"]
@@ -224,19 +301,29 @@ def _require_model(client: httpx.Client, model_name: str) -> None:
     }
     if model_name not in installed:
         raise StructuredAssessmentError(
-            f"configured structured model is not installed: {model_name}"
+            f"configured model is not installed: {model_name}",
+            ProviderFailureCategory.MODEL_MISSING,
         )
 
 
 def _content_from(payload: object) -> str:
     if not isinstance(payload, dict):
-        raise StructuredAssessmentError("Ollama chat response must be an object")
+        raise StructuredAssessmentError(
+            "Ollama chat response must be an object",
+            ProviderFailureCategory.MALFORMED_PROVIDER_RESPONSE,
+        )
     message = payload.get("message")
     if not isinstance(message, dict):
-        raise StructuredAssessmentError("Ollama chat response must contain message content")
+        raise StructuredAssessmentError(
+            "Ollama chat response must contain message content",
+            ProviderFailureCategory.MALFORMED_PROVIDER_RESPONSE,
+        )
     content = message.get("content")
     if not isinstance(content, str):
-        raise StructuredAssessmentError("Ollama chat response must contain message content")
+        raise StructuredAssessmentError(
+            "Ollama chat response must contain message content",
+            ProviderFailureCategory.MALFORMED_PROVIDER_RESPONSE,
+        )
     return content
 
 
@@ -248,15 +335,21 @@ def _validate_verdict(
 ) -> None:
     if verdict.confidence < configuration.intelligence.structured_assessment.minimum_confidence:
         raise StructuredAssessmentError(
-            "structured assessment confidence is below the configured minimum"
+            "structured assessment confidence is below the configured minimum",
+            ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
+            (("policy_validation_success", False), ("policy_rejection", "confidence")),
         )
     if verdict.role_level not in {RoleMatchLevel.REVIEW, RoleMatchLevel.RELEVANT}:
         raise StructuredAssessmentError(
-            "structured assessment must propose review or relevant only"
+            "structured assessment must propose review or relevant only",
+            ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
+            (("policy_validation_success", False), ("policy_rejection", "role_level")),
         )
     if _level_rank(verdict.role_level) <= _level_rank(current_level):
         raise StructuredAssessmentError(
-            "structured assessment may only promote the prior role level"
+            "structured assessment may only promote the prior role level",
+            ProviderFailureCategory.SEMANTIC_POLICY_REJECTED,
+            (("policy_validation_success", False), ("policy_rejection", "not_promotion")),
         )
     source_text = f"{listing.title}\n{listing.description}".casefold()
     if any(
@@ -264,7 +357,9 @@ def _validate_verdict(
         for evidence in verdict.evidence
     ):
         raise StructuredAssessmentError(
-            "structured assessment evidence is not grounded in the listing"
+            "structured assessment evidence is not grounded in the listing",
+            ProviderFailureCategory.EVIDENCE_GROUNDING_FAILURE,
+            (("policy_validation_success", False), ("evidence_grounded", False)),
         )
 
 
@@ -284,6 +379,9 @@ def _semantic(
     proposed_role_level: RoleMatchLevel | None = None,
     evidence: tuple[SemanticEvidence, ...] = (),
     fallback_reason: str | None = None,
+    error_category: str | None = None,
+    invoked: bool = False,
+    diagnostic_fields: SafeDiagnosticFields = (),
 ) -> SemanticAssessment:
     return SemanticAssessment(
         provider=StructuredLLMAssessmentProvider.name,
@@ -292,4 +390,7 @@ def _semantic(
         proposed_role_level=proposed_role_level.value if proposed_role_level is not None else None,
         evidence=evidence,
         fallback_reason=fallback_reason,
+        error_category=error_category,
+        invoked=invoked,
+        diagnostic_fields=diagnostic_fields,
     )

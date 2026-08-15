@@ -210,7 +210,7 @@ class LocalRagRetriever:
         *,
         configuration: SearchConfiguration,
         index_path: Path,
-        embedding_cache_path: Path,
+        embedding_cache_path: Path | None,
         client: OllamaEmbeddingClient | None = None,
     ) -> None:
         self._configuration = configuration
@@ -238,7 +238,7 @@ class LocalRagRetriever:
         )
         model = self._configuration.intelligence.embedding.model
         try:
-            with EmbeddingCache(self._cache_path) as cache:
+            with _cache_for_retrieval(self._cache_path) as cache:
                 vectors = cached_embeddings(
                     model=model,
                     texts=(query, *(chunk.text for chunk in chunks)),
@@ -305,3 +305,15 @@ def _unique_documents(
 
 def _fingerprint(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+class _NoCache:
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+
+def _cache_for_retrieval(path: Path | None) -> EmbeddingCache | _NoCache:
+    return EmbeddingCache(path) if path is not None else _NoCache()

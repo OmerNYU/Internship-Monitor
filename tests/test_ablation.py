@@ -298,6 +298,7 @@ class AblationTests(TestCase):
             stage=IntelligenceStage.EMBEDDING,
             status=IntelligenceTraceStatus.SUCCEEDED,
             model="local-embed",
+            invoked=True,
         )
         fallback = append_intelligence_stage(
             succeeded,
@@ -318,6 +319,10 @@ class AblationTests(TestCase):
         self.assertIn(("structured_llm", "unavailable", 2), result.stage_statuses)
         self.assertEqual(result.error_categories, (("timeout", 2),))
         self.assertEqual(result.tool_metrics, (("tool_calls", 0), ("retrievals", 0)))
+        execution = {item.stage: item for item in result.execution}
+        self.assertEqual(execution["embedding"].attempted, 2)
+        self.assertEqual(execution["embedding"].succeeded, 2)
+        self.assertEqual(execution["structured_llm"].attempted, 0)
 
     def test_incorrect_hard_blocks_and_safe_artifacts_are_reported(self):
         blocker = HardBlocker(HardBlockerKind.HARD_EXCLUDED_LOCATION, "test", ("test",))

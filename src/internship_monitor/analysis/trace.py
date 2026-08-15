@@ -38,9 +38,11 @@ def append_intelligence_stage(
     model: str | None = None,
     fallback_reason: str | None = None,
     error_category: str | None = None,
+    invoked: bool = False,
     tool_names: tuple[str, ...] = (),
     retrieval_count: int = 0,
     source_ids: tuple[str, ...] = (),
+    diagnostic_fields: tuple[tuple[str, str | int | float | bool | None], ...] = (),
 ) -> JobAssessment:
     """Append safe diagnostic provenance without affecting an assessment decision."""
     prior = prior_role_level or assessment.role.level.value
@@ -54,9 +56,11 @@ def append_intelligence_stage(
         model=model,
         fallback_reason=fallback_reason,
         error_category=error_category,
+        invoked=invoked,
         tool_names=tool_names,
         retrieval_count=retrieval_count,
         source_ids=source_ids,
+        diagnostic_fields=diagnostic_fields,
     )
     return replace(
         assessment,
@@ -64,12 +68,29 @@ def append_intelligence_stage(
     )
 
 
-def trace_status_from_semantic(status: str, fallback_reason: str | None) -> IntelligenceTraceStatus:
-    """Map existing semantic outcome states to stable provider-trace outcomes."""
+def trace_status_from_semantic(
+    status: str, fallback_reason: str | None, error_category: str | None = None
+) -> IntelligenceTraceStatus:
+    """Map optional-provider results to stable trace states using typed failures first."""
     if status == "applied":
         return IntelligenceTraceStatus.SUCCEEDED
     if status.startswith("skipped"):
         return IntelligenceTraceStatus.SKIPPED
+    if error_category in {
+        "invalid_http_response",
+        "malformed_provider_response",
+        "schema_validation_failure",
+        "embedding_invalid",
+        "tool_protocol_failure",
+    }:
+        return IntelligenceTraceStatus.INVALID_OUTPUT
+    if error_category in {
+        "provider_unreachable",
+        "model_missing",
+        "timeout",
+        "retrieval_unavailable",
+    }:
+        return IntelligenceTraceStatus.UNAVAILABLE
     if fallback_reason and any(
         term in fallback_reason.casefold() for term in ("invalid", "schema", "malformed")
     ):

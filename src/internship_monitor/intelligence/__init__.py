@@ -6,11 +6,17 @@ from internship_monitor.intelligence.agent import (
     AgentRoleVerdict,
     OllamaAdjudicationClient,
 )
+from internship_monitor.intelligence.diagnostics import (
+    IntelligenceProbeReport,
+    ProbeCheck,
+    probe_intelligence,
+)
 from internship_monitor.intelligence.embeddings import (
     EmbeddingCache,
     EmbeddingProviderError,
     OllamaEmbeddingClient,
 )
+from internship_monitor.intelligence.failures import ProviderFailureCategory, failure_category
 from internship_monitor.intelligence.providers import (
     IntelligenceProvider,
     OllamaHealthProvider,
@@ -53,12 +59,15 @@ __all__ = [
     "EmbeddingAssessmentProvider",
     "EmbeddingCache",
     "EmbeddingProviderError",
+    "IntelligenceProbeReport",
     "IntelligenceProvider",
     "LocalRagRetriever",
     "OllamaAdjudicationClient",
     "OllamaEmbeddingClient",
     "OllamaHealthProvider",
     "OllamaStructuredAssessmentClient",
+    "ProbeCheck",
+    "ProviderFailureCategory",
     "ProviderHealth",
     "ProviderHealthStatus",
     "RagRetriever",
@@ -69,7 +78,9 @@ __all__ = [
     "StructuredRoleVerdict",
     "build_corpus_index",
     "cosine_similarity",
+    "failure_category",
     "load_private_documents",
+    "probe_intelligence",
     "provider_from_configuration",
     "role_archetypes",
 ]

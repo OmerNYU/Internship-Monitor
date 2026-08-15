@@ -9,6 +9,7 @@ from internship_monitor.analysis import DeterministicAssessor, RoleMatchLevel
 from internship_monitor.config import load_search_configuration
 from internship_monitor.evaluation import load_gold_cases
 from internship_monitor.intelligence import (
+    AgentError,
     CorpusError,
     CorpusKind,
     LocalRagRetriever,
@@ -112,9 +113,19 @@ class RagAndAgentTests(TestCase):
                     200,
                     json={
                         "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "thinking": "ignored by the tool parser",
                             "tool_calls": [
-                                {"function": {"name": "retrieve_profile_context", "arguments": {}}}
-                            ]
+                                {
+                                    "id": "call-1",
+                                    "function": {
+                                        "index": 0,
+                                        "name": "retrieve_profile_context",
+                                        "arguments": {},
+                                    },
+                                }
+                            ],
                         }
                     },
                 )
@@ -145,4 +156,67 @@ class RagAndAgentTests(TestCase):
         self.assertEqual(
             [item.url.path for item in requests], ["/api/tags", "/api/chat", "/api/chat"]
         )
-        self.assertIn("format", json.loads(requests[1].content))
+        first_request = json.loads(requests[1].content)
+        second_request = json.loads(requests[2].content)
+        self.assertNotIn("format", first_request)
+        self.assertIn("format", second_request)
+        self.assertEqual(second_request["messages"][-1]["role"], "tool")
+        self.assertEqual(second_request["messages"][-1]["tool_name"], "retrieve_profile_context")
+
+    def test_agent_rejects_malformed_unknown_and_invalid_tool_calls(self) -> None:
+        listing = load_gold_cases(FIXTURE)[0].listing
+        assessment = DeterministicAssessor(self._configuration()).assess(listing)
+        invalid_calls = (
+            ({"function": {"name": "unknown_tool", "arguments": {}}}, "not allowed"),
+            (
+                {"function": {"name": "retrieve_profile_context", "arguments": "{}"}},
+                "invalid arguments",
+            ),
+            ({"unexpected": "tool"}, "invalid tool call"),
+        )
+        for tool_call, message in invalid_calls:
+            with self.subTest(tool_call=tool_call):
+
+                def handler(
+                    request: httpx.Request, tool_call: object = tool_call
+                ) -> httpx.Response:
+                    if request.url.path == "/api/tags":
+                        return httpx.Response(200, json={"models": [{"name": "qwen3:4b"}]})
+                    return httpx.Response(200, json={"message": {"tool_calls": [tool_call]}})
+
+                client = OllamaAdjudicationClient(
+                    self._configuration(), transport=httpx.MockTransport(handler)
+                )
+                with self.assertRaisesRegex(AgentError, message):
+                    client.adjudicate(listing, assessment, StaticRetriever())
+
+    def test_agent_enforces_round_cap_after_native_tool_calls(self) -> None:
+        listing = load_gold_cases(FIXTURE)[0].listing
+        assessment = DeterministicAssessor(self._configuration()).assess(listing)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/api/tags":
+                return httpx.Response(200, json={"models": [{"name": "qwen3:4b"}]})
+            return httpx.Response(
+                200,
+                json={
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "name": "retrieve_profile_context",
+                                    "arguments": {},
+                                }
+                            }
+                        ],
+                    }
+                },
+            )
+
+        client = OllamaAdjudicationClient(
+            self._configuration(), transport=httpx.MockTransport(handler)
+        )
+        with self.assertRaisesRegex(AgentError, "exceeded the configured tool-call limit"):
+            client.adjudicate(listing, assessment, StaticRetriever())
