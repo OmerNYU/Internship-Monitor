@@ -91,3 +91,29 @@ class AdapterRunnerTests(TestCase):
         self.assertIsInstance(results[1], SourceRunSuccess)
         self.assertEqual(results[0].company, "First Company")
         self.assertEqual(results[1].company, "Second Company")
+
+
+class TransientAdapter:
+    def __init__(self, configured_company: CompanyConfig) -> None:
+        self.company = configured_company
+        self.calls = 0
+
+    async def fetch(self) -> tuple[JobListing, ...]:
+        self.calls += 1
+        if self.calls < 3:
+            import httpx
+
+            raise httpx.ConnectError("temporary")
+        return (listing(self.company.name),)
+
+
+class RetryTests(TestCase):
+    def test_transient_connection_failure_retries_with_bounded_attempts(self) -> None:
+        adapter = TransientAdapter(company("Retry Company"))
+
+        result = asyncio.run(run_adapters((adapter,)))[0]
+
+        self.assertIsInstance(result, SourceRunSuccess)
+        assert isinstance(result, SourceRunSuccess)
+        self.assertEqual(adapter.calls, 3)
+        self.assertEqual(result.attempt_count, 3)

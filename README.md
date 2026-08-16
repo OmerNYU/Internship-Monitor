@@ -102,3 +102,33 @@ See [`docs/architecture.md`](docs/architecture.md),
 [`docs/evaluation_harness_v0.1.md`](docs/evaluation_harness_v0.1.md), and
 [`docs/intelligence_provider_v0.1.md`](docs/intelligence_provider_v0.1.md) for architecture,
 regional, evaluation, and optional-local-provider guidance.
+
+## Operational source safety
+
+A completed request is not automatically an authoritative inventory snapshot. The monitor only
+reconciles disappeared listings after an authoritative source snapshot. If a source that previously
+had active listings returns zero canonical listings, the response is recorded as a degraded,
+non-authoritative `suspicious_empty_snapshot`; existing listings remain active. A first observed
+empty source remains visible as a healthy empty snapshot. The monitor intentionally does not apply
+an unproven percentage-drop heuristic.
+
+Source requests retry only bounded transient failures (connection/read timeout, HTTP 429, and
+HTTP 5xx), with at most three total attempts and deterministic short backoff. Malformed payloads,
+unsupported adapters, and other non-transient errors are not retried. Safe per-source observations
+are retained in the listing-state SQLite database with bounded history; they contain counts,
+attempts, duration, authority, and typed failure category, never response bodies or exception text.
+`status` reports the latest source health and recent issue count.
+
+Run a read-only local readiness check before a scheduled or normal run:
+
+```bash
+uv run internship-monitor preflight \
+  --profile config.local/profile.yaml \
+  --companies config.local/companies.yaml
+```
+
+`preflight` validates profile/allowlist structure, supported adapters, duplicate enabled source
+identities, and writable state parents. It does not fetch job boards, initialize durable databases,
+contact Ollama, or send notifications. Add `--delivery-readiness --notifications
+config.local/notifications.yaml` only to validate notifier configuration structurally; it still
+never sends a message.

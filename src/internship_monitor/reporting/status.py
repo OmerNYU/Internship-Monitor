@@ -7,7 +7,7 @@ from pathlib import Path
 
 from internship_monitor.notifications import NotificationQueueRepository
 from internship_monitor.reporting.models import SystemStatus
-from internship_monitor.state import JobStateRepository
+from internship_monitor.state import JobStateRepository, SourceHealthSummary
 
 
 def _utc_now() -> datetime:
@@ -24,24 +24,24 @@ def system_status(
     moment = now or _utc_now()
     listing_path = Path(listing_state_path)
     notification_path = Path(notification_state_path)
-
     listings = None
     last_monitor_run = None
+    source_health: tuple[SourceHealthSummary, ...] = ()
     if listing_path.exists():
         with JobStateRepository(listing_path, read_only=True) as repository:
             listings = repository.listing_state_counts()
             last_monitor_run = repository.latest_monitor_summary()
-
+            source_health = repository.source_health_summaries()
     notifications = None
     last_delivery_run = None
     if notification_path.exists():
         with NotificationQueueRepository(notification_path, read_only=True) as repository:
             notifications = repository.queue_counts(now=moment)
             last_delivery_run = repository.latest_delivery_summary()
-
     return SystemStatus(
         listings=listings,
         notifications=notifications,
         last_monitor_run=last_monitor_run,
         last_delivery_run=last_delivery_run,
+        source_health=source_health,
     )

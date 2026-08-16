@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from internship_monitor.state.models import SourceHealthSummary
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +27,8 @@ class MonitorRunSummary:
     opportunities: int
     assessments: int
     alerts_queued: int
+    sources_authoritative: int = 0
+    sources_degraded: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +71,7 @@ class SystemStatus:
     notifications: NotificationQueueCounts | None
     last_monitor_run: MonitorRunSummary | None
     last_delivery_run: DeliveryRunSummary | None
+    source_health: tuple[SourceHealthSummary, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

@@ -28,6 +28,8 @@ def monitor_run_summary(
         run_at=run_at,
         sources_configured=sources_configured,
         sources_successful=len(result.source_results) - result.source_failure_count,
+        sources_authoritative=result.source_authoritative_count,
+        sources_degraded=result.source_degraded_count,
         sources_failed=result.source_failure_count,
         listings_seen=result.listing_count,
         listings_new=result.change_count(ListingChange.NEW),

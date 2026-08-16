@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from internship_monitor import __version__
+from internship_monitor.adapters import SourceRunFailure
 from internship_monitor.analysis import AssessmentProvider, DeterministicAssessor
 from internship_monitor.config import (
     NotificationConfiguration,
@@ -66,6 +67,7 @@ from internship_monitor.orchestration import (
     run_configured_dry_run,
     run_configured_monitoring_run,
 )
+from internship_monitor.preflight import PreflightReport, operational_preflight
 from internship_monitor.reporting.models import SystemStatus
 from internship_monitor.reporting.service import (
     delivery_run_summary,
@@ -100,6 +102,26 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("state/notifications.sqlite3"),
         help="Path to local queued-notification state.",
+    )
+    preflight_parser = subparsers.add_parser(
+        "preflight",
+        help="Validate local operational configuration without discovery, state writes, or delivery.",  # noqa: E501
+    )
+    preflight_parser.add_argument(
+        "--profile", type=Path, default=Path("config/profile.example.yaml")
+    )
+    preflight_parser.add_argument(
+        "--companies", type=Path, default=Path("config/companies.example.yaml")
+    )
+    preflight_parser.add_argument("--state", type=Path, default=Path("state/jobs.sqlite3"))
+    preflight_parser.add_argument(
+        "--notification-state", type=Path, default=Path("state/notifications.sqlite3")
+    )
+    preflight_parser.add_argument("--notifications", type=Path)
+    preflight_parser.add_argument(
+        "--delivery-readiness",
+        action="store_true",
+        help="Also validate notifier configuration structurally without sending anything.",
     )
     run_parser = subparsers.add_parser(
         "run",
@@ -330,6 +352,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "status":
         print(_status_summary(system_status(args.state, args.notification_state)))
         return 0
+
+    if args.command == "preflight":
+        report = operational_preflight(
+            args.profile,
+            args.companies,
+            state_path=args.state,
+            notification_state_path=args.notification_state,
+            notifications_path=args.notifications,
+            delivery_readiness=args.delivery_readiness,
+        )
+        print(_preflight_summary(report))
+        return 0 if report.ok else 1
 
     if args.command == "deliver":
         return _deliver_command(args, parser)
@@ -770,10 +804,27 @@ def _run_summary(result: MonitoringRunResult, *, dry_run: bool) -> str:
         f"{mode} complete: {len(result.source_results)} source runs, "
         f"{result.listing_count} listings, {result.opportunity_count} opportunities, "
         f"{len(result.alert_decisions)} alert decisions, "
-        f"{len(result.assessments)} assessments, {result.source_failure_count} failures; "
+        f"{len(result.assessments)} assessments, {result.source_authoritative_count} authoritative, "  # noqa: E501
+        f"{result.source_degraded_count} degraded, {result.source_failure_count} failures; "
         f"geographic routing: {geographic_routing or 'none'}; "
+        f"source issues: {_source_issue_summary(result) or 'none'}; "
         f"state changes: {changes or 'none'}. {state_note} and no notifications were sent."
     )
+
+
+def _source_issue_summary(result: MonitoringRunResult) -> str:
+    issues = []
+    for source_result in result.source_results:
+        if isinstance(source_result, SourceRunFailure):
+            issues.append(
+                f"{source_result.company} ({source_result.source_type}): "
+                f"{source_result.failure_category.value}"
+            )
+        elif not source_result.is_authoritative:
+            issues.append(
+                f"{source_result.company} ({source_result.source_type}): suspicious_empty_snapshot"
+            )
+    return "; ".join(issues)
 
 
 def _notification_preview_summary(result: MonitoringRunResult) -> str:
@@ -882,6 +933,28 @@ def _status_summary(status: SystemStatus) -> str:
             f"{status.last_monitor_run.listings_seen} listings seen, "
             f"{status.last_monitor_run.alerts_queued} alerts queued."
         )
+    if status.source_health:
+        healthy = sum(item.status.value == "healthy" for item in status.source_health)
+        degraded = sum(item.status.value == "degraded" for item in status.source_health)
+        failed = sum(item.status.value == "failed" for item in status.source_health)
+        sections.append(
+            f"Source health: {len(status.source_health)} configured, healthy={healthy}, "
+            f"degraded={degraded}, failed={failed}."
+        )
+        for item in status.source_health:
+            last_authoritative = (
+                item.last_authoritative_success_at.isoformat()
+                if item.last_authoritative_success_at is not None
+                else "never"
+            )
+            category = f", reason={item.failure_category}" if item.failure_category else ""
+            sections.append(
+                f"  {item.company} ({item.source_type}): {item.status.value}, "
+                f"authoritative={str(item.authoritative).lower()}, "
+                f"last_authoritative={last_authoritative}, recent_issues={item.recent_issue_count}{category}."  # noqa: E501
+            )
+    else:
+        sections.append("Source health: no persisted observations.")
     if status.last_delivery_run is not None:
         sections.append(
             "Last delivery run: "
@@ -891,3 +964,11 @@ def _status_summary(status: SystemStatus) -> str:
             f"{status.last_delivery_run.terminal_failures} terminal failures."
         )
     return "\n".join(sections)
+
+
+def _preflight_summary(report: PreflightReport) -> str:
+    checks = report.checks
+    lines = ["Operational preflight"]
+    for check in checks:
+        lines.append(f"{check.level.value} {check.name}: {check.detail}.")
+    return "\n".join(lines)

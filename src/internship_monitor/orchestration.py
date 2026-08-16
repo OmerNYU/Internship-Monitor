@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 import httpx
@@ -12,8 +12,10 @@ from internship_monitor.adapters import (
     GreenhouseAdapter,
     LeverAdapter,
     SourceAdapter,
+    SourceRunFailure,
     SourceRunResult,
     SourceRunSuccess,
+    SourceSnapshotStatus,
     run_adapters,
 )
 from internship_monitor.alerts import AlertDecision, AlertPolicy
@@ -21,7 +23,13 @@ from internship_monitor.analysis import DeterministicAssessor, JobAssessment
 from internship_monitor.config import CompanyAllowlist, CompanyConfig, SearchConfiguration
 from internship_monitor.models import JobListing
 from internship_monitor.opportunities import OpportunityGroup, OpportunityGrouper
-from internship_monitor.state import JobStateRepository, ListingChange, ListingObservation
+from internship_monitor.state import (
+    JobStateRepository,
+    ListingChange,
+    ListingObservation,
+    SourceHealthRecord,
+    SourceHealthStatus,
+)
 
 AdapterFactory = Callable[[CompanyConfig], SourceAdapter]
 
@@ -42,7 +50,6 @@ class MonitoringRunResult:
 
     @property
     def listing_count(self) -> int:
-        """Return the count of successfully retrieved canonical listings."""
         return sum(
             len(result.listings)
             for result in self.source_results
@@ -51,16 +58,27 @@ class MonitoringRunResult:
 
     @property
     def source_failure_count(self) -> int:
-        """Return the count of source runs that failed in isolation."""
-        return sum(not isinstance(result, SourceRunSuccess) for result in self.source_results)
+        return sum(isinstance(result, SourceRunFailure) for result in self.source_results)
+
+    @property
+    def source_authoritative_count(self) -> int:
+        return sum(
+            isinstance(result, SourceRunSuccess) and result.is_authoritative
+            for result in self.source_results
+        )
+
+    @property
+    def source_degraded_count(self) -> int:
+        return sum(
+            isinstance(result, SourceRunSuccess) and not result.is_authoritative
+            for result in self.source_results
+        )
 
     @property
     def opportunity_count(self) -> int:
-        """Return the number of distinct or conservatively grouped opportunities."""
         return len(self.opportunity_groups)
 
     def change_count(self, change: ListingChange) -> int:
-        """Count observations with one listing-state transition."""
         return sum(observation.change is change for observation in self.observations)
 
 
@@ -101,7 +119,7 @@ async def run_persisted_run(
     adapter_factory: AdapterFactory,
     repository: JobStateRepository,
 ) -> MonitoringRunResult:
-    """Fetch, assess, group, and persist only successful source snapshots."""
+    """Fetch, assess, group, and persist only authoritative source snapshots."""
     return await _run_monitor(
         search_configuration,
         company_allowlist,
@@ -122,7 +140,8 @@ async def _run_monitor(
     adapters = tuple(
         adapter_factory(company) for company in company_allowlist.companies if company.enabled
     )
-    source_results = await run_adapters(adapters)
+    fetched_results = await run_adapters(adapters)
+    source_results = _classify_snapshot_authority(fetched_results, repository)
     successful_results = tuple(
         result for result in source_results if isinstance(result, SourceRunSuccess)
     )
@@ -135,23 +154,20 @@ async def _run_monitor(
     opportunity_groups = OpportunityGrouper().group(
         tuple(assessment.job for assessment in assessments)
     )
-
     observations = tuple(
         observation
         for source_result in successful_results
         for observation in _observe_successful_source(
-            source_result,
-            repository=repository,
-            persist=persist,
+            source_result, repository=repository, persist=persist
         )
     )
-
+    if persist and repository is not None:
+        _record_source_health(source_results, repository)
     run_time = _utc_now()
     alert_decisions = tuple(
         AlertPolicy().decide(group, assessments, observations, now=run_time)
         for group in opportunity_groups
     )
-
     return MonitoringRunResult(
         source_results=source_results,
         assessments=assessments,
@@ -161,17 +177,86 @@ async def _run_monitor(
     )
 
 
+def _classify_snapshot_authority(
+    source_results: tuple[SourceRunResult, ...], repository: JobStateRepository | None
+) -> tuple[SourceRunResult, ...]:
+    """Protect prior inventory only for the unambiguous empty-after-active failure mode."""
+    classified: list[SourceRunResult] = []
+    for result in source_results:
+        if not isinstance(result, SourceRunSuccess) or repository is None:
+            classified.append(result)
+            continue
+        previous_active_count = repository.active_listing_count(
+            source_type=result.source_type, company=result.company
+        )
+        if previous_active_count > 0 and not result.listings:
+            classified.append(
+                replace(
+                    result,
+                    snapshot_status=SourceSnapshotStatus.NON_AUTHORITATIVE,
+                    previous_active_count=previous_active_count,
+                )
+            )
+        else:
+            classified.append(replace(result, previous_active_count=previous_active_count))
+    return tuple(classified)
+
+
+def _record_source_health(
+    source_results: tuple[SourceRunResult, ...], repository: JobStateRepository
+) -> None:
+    observed_at = _utc_now()
+    for result in source_results:
+        if isinstance(result, SourceRunSuccess):
+            status = (
+                SourceHealthStatus.HEALTHY
+                if result.is_authoritative
+                else SourceHealthStatus.DEGRADED
+            )
+            category = "suspicious_empty_snapshot" if not result.is_authoritative else None
+            repository.record_source_health(
+                SourceHealthRecord(
+                    source_type=result.source_type,
+                    company=result.company,
+                    observed_at=observed_at,
+                    status=status,
+                    authoritative=result.is_authoritative,
+                    listing_count=len(result.listings),
+                    previous_active_count=result.previous_active_count,
+                    attempt_count=result.attempt_count,
+                    duration_ms=result.duration_ms,
+                    failure_category=category,
+                )
+            )
+        else:
+            repository.record_source_health(
+                SourceHealthRecord(
+                    source_type=result.source_type,
+                    company=result.company,
+                    observed_at=observed_at,
+                    status=SourceHealthStatus.FAILED,
+                    authoritative=False,
+                    listing_count=0,
+                    previous_active_count=repository.active_listing_count(
+                        source_type=result.source_type, company=result.company
+                    ),
+                    attempt_count=result.attempt_count,
+                    duration_ms=result.duration_ms,
+                    failure_category=result.failure_category.value,
+                )
+            )
+
+
 def _observe_successful_source(
-    source_result: SourceRunSuccess,
-    *,
-    repository: JobStateRepository | None,
-    persist: bool,
+    source_result: SourceRunSuccess, *, repository: JobStateRepository | None, persist: bool
 ) -> tuple[ListingObservation, ...]:
     if repository is None:
         return tuple(
             ListingObservation(listing=listing, change=ListingChange.NEW)
             for listing in source_result.listings
         )
+    if not source_result.is_authoritative:
+        return ()
     if persist:
         return repository.record_successful_source_run(
             source_result.listings,
@@ -179,9 +264,7 @@ def _observe_successful_source(
             company=source_result.company,
         )
     return repository.compare_successful_source_run(
-        source_result.listings,
-        source_type=source_result.source_type,
-        company=source_result.company,
+        source_result.listings, source_type=source_result.source_type, company=source_result.company
     )
 
 
@@ -193,10 +276,7 @@ async def run_configured_dry_run(
 ) -> MonitoringRunResult:
     """Run configured sources and compare state without writing it."""
     return await _run_configured(
-        search_configuration,
-        company_allowlist,
-        repository=repository,
-        persist=False,
+        search_configuration, company_allowlist, repository=repository, persist=False
     )
 
 
@@ -206,12 +286,9 @@ async def run_configured_monitoring_run(
     *,
     repository: JobStateRepository,
 ) -> MonitoringRunResult:
-    """Run configured sources and persist their successful snapshots."""
+    """Run configured sources and persist source health and authoritative snapshots."""
     return await _run_configured(
-        search_configuration,
-        company_allowlist,
-        repository=repository,
-        persist=True,
+        search_configuration, company_allowlist, repository=repository, persist=True
     )
 
 
@@ -230,7 +307,6 @@ async def _run_configured(
             repository=repository,
             persist=persist,
         )
-
     async with httpx.AsyncClient(timeout=20.0) as client:
         return await _run_with_factory(
             search_configuration,

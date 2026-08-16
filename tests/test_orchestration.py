@@ -198,3 +198,63 @@ class MonitoringCompositionTests(TestCase):
         self.assertEqual(result.source_failure_count, 1)
         self.assertEqual(result.observations, ())
         self.assertEqual(comparison[0].change, ListingChange.UNCHANGED)
+
+    def test_empty_snapshot_after_active_inventory_is_degraded_and_preserves_listings(self) -> None:
+        configured_company = company("Working Company")
+        allowlist = CompanyAllowlist(companies=(configured_company,))
+
+        def adapter_factory(company_config: CompanyConfig) -> SourceAdapter:
+            return SuccessfulAdapter(company_config, ())
+
+        with (
+            TemporaryDirectory() as directory,
+            JobStateRepository(Path(directory) / "jobs.sqlite3") as repository,
+        ):
+            repository.record_successful_source_run(
+                (listing(),), source_type="greenhouse", company="Working Company"
+            )
+            result = asyncio.run(
+                run_persisted_run(
+                    self.configuration,
+                    allowlist,
+                    adapter_factory=adapter_factory,
+                    repository=repository,
+                )
+            )
+            comparison = repository.compare_successful_source_run(
+                (listing(),), source_type="greenhouse", company="Working Company"
+            )
+            health = repository.source_health_summaries()
+
+        self.assertEqual(result.source_authoritative_count, 0)
+        self.assertEqual(result.source_degraded_count, 1)
+        self.assertEqual(comparison[0].change, ListingChange.UNCHANGED)
+        self.assertEqual(health[0].status.value, "degraded")
+        self.assertFalse(health[0].authoritative)
+        self.assertEqual(health[0].failure_category, "suspicious_empty_snapshot")
+
+    def test_first_empty_snapshot_is_authoritative_and_visible_as_healthy(self) -> None:
+        configured_company = company("Working Company")
+        allowlist = CompanyAllowlist(companies=(configured_company,))
+
+        def adapter_factory(company_config: CompanyConfig) -> SourceAdapter:
+            return SuccessfulAdapter(company_config, ())
+
+        with (
+            TemporaryDirectory() as directory,
+            JobStateRepository(Path(directory) / "jobs.sqlite3") as repository,
+        ):
+            result = asyncio.run(
+                run_persisted_run(
+                    self.configuration,
+                    allowlist,
+                    adapter_factory=adapter_factory,
+                    repository=repository,
+                )
+            )
+            health = repository.source_health_summaries()
+
+        self.assertEqual(result.source_authoritative_count, 1)
+        self.assertEqual(result.source_degraded_count, 0)
+        self.assertEqual(health[0].status.value, "healthy")
+        self.assertTrue(health[0].authoritative)
