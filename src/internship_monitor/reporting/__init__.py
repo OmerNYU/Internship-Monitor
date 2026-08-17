@@ -6,6 +6,7 @@ from internship_monitor.reporting.models import (
     ListingStateCounts,
     MonitorRunSummary,
     NotificationQueueCounts,
+    ShadowStatusSummary,
     SystemStatus,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "ListingStateCounts",
     "MonitorRunSummary",
     "NotificationQueueCounts",
+    "ShadowStatusSummary",
     "SystemStatus",
 ]

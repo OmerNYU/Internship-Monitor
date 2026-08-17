@@ -64,6 +64,23 @@ class NotificationQueueCounts:
 
 
 @dataclass(frozen=True, slots=True)
+class ShadowStatusSummary:
+    """Read-only aggregate for local-only shadow intelligence observations."""
+
+    persisted: int
+    last_run: datetime | None
+    succeeded: int
+    fallbacks: int
+    policy_rejections: int
+    last_considered: int
+    last_selected: int
+    last_attempted: int
+    last_rag_retrievals: int
+    last_tool_calls: int
+    last_disagreements: int
+
+
+@dataclass(frozen=True, slots=True)
 class SystemStatus:
     """Read-only operational view for CLI, workflow logs, and future dashboards."""
 
@@ -72,6 +89,7 @@ class SystemStatus:
     last_monitor_run: MonitorRunSummary | None
     last_delivery_run: DeliveryRunSummary | None
     source_health: tuple[SourceHealthSummary, ...] = ()
+    shadow: ShadowStatusSummary | None = None
 
 
 @dataclass(frozen=True, slots=True)

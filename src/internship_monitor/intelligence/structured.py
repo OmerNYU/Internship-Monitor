@@ -47,6 +47,7 @@ class StructuredRoleVerdict(BaseModel):
     role_level: RoleMatchLevel
     confidence: float = Field(ge=0, le=1)
     evidence: tuple[str, ...] = Field(min_length=1, max_length=3)
+    role_family: str | None = Field(default=None, max_length=80)
 
 
 class OllamaStructuredAssessmentClient:
@@ -252,7 +253,12 @@ class StructuredLLMAssessmentProvider:
             invoked=True,
             diagnostic_fields=merge_diagnostic_fields(
                 getattr(self._client, "last_diagnostic", ()),
-                (("policy_validation_success", True),),
+                (
+                    ("policy_validation_success", True),
+                    ("proposed_role_family", verdict.role_family),
+                    ("confidence", verdict.confidence),
+                    ("evidence_grounded", True),
+                ),
             ),
         )
         return _rescore(assessment, role, semantic)
@@ -338,6 +344,7 @@ def _validate_verdict(
         ("proposed_role_level", verdict.role_level.value),
         ("confidence", verdict.confidence),
         ("evidence_grounded", evidence_grounded),
+        ("proposed_role_family", verdict.role_family),
     )
     if verdict.confidence < configuration.intelligence.structured_assessment.minimum_confidence:
         raise StructuredAssessmentError(

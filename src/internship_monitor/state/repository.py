@@ -1,13 +1,16 @@
+# ruff: noqa: E501
 """Small SQLite repository for stable job-listing state and safe source health."""
 
 from __future__ import annotations
 
+# ruff: noqa: E501
 import hashlib
 import json
 import sqlite3
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from internship_monitor.models import JobListing
 from internship_monitor.reporting.models import ListingStateCounts, MonitorRunSummary
@@ -192,6 +195,188 @@ class JobStateRepository:
             return ()
         return tuple(_source_health_summary_from_row(row) for row in rows)
 
+    def shadow_assessment_exists(
+        self,
+        listing: JobListing,
+        semantic_fingerprint: str,
+        deterministic_fingerprint: str,
+        contract_fingerprint: str,
+    ) -> bool:
+        try:
+            row = self._connection.execute(
+                """SELECT 1 FROM shadow_assessments WHERE source = ? AND company = ?
+                AND source_job_id = ? AND semantic_fingerprint = ?
+                AND deterministic_fingerprint = ? AND contract_fingerprint = ? LIMIT 1""",
+                (
+                    listing.source,
+                    listing.company,
+                    listing.source_job_id,
+                    semantic_fingerprint,
+                    deterministic_fingerprint,
+                    contract_fingerprint,
+                ),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return False
+        return row is not None
+
+    def record_shadow_assessment(self, record: Any, retention_days: int) -> None:
+        """Append a safe local shadow observation and bounded stage provenance."""
+        if self._read_only:
+            raise RuntimeError("cannot record shadow assessment through a read-only repository")
+        listing = record.listing
+        with self._connection:
+            cursor = self._connection.execute(
+                """INSERT INTO shadow_assessments (
+                source, company, source_job_id, observed_at, semantic_fingerprint, deterministic_fingerprint,
+                contract_fingerprint, rag_fingerprint, routing_category, status, title, description, location,
+                workplace_type, employment_type, apply_url, deterministic_role_level, deterministic_role_family,
+                hard_blocked, blocker_categories, recommendation, proposed_role_level, proposed_role_family,
+                confidence, evidence_grounded, citation_grounded, failure_category, fallback_reason,
+                policy_rejection, elapsed_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    listing.source,
+                    listing.company,
+                    listing.source_job_id,
+                    _timestamp_text(record.observed_at),
+                    record.semantic_fingerprint,
+                    record.deterministic_fingerprint,
+                    record.contract_fingerprint,
+                    record.rag_fingerprint,
+                    record.routing_category.value,
+                    record.status,
+                    listing.title,
+                    listing.description,
+                    listing.location,
+                    listing.workplace_type,
+                    listing.employment_type,
+                    listing.apply_url,
+                    record.deterministic_role_level,
+                    record.deterministic_role_family,
+                    int(record.hard_blocked),
+                    json.dumps(record.blocker_categories),
+                    record.recommendation,
+                    record.proposed_role_level,
+                    record.proposed_role_family,
+                    record.confidence,
+                    record.evidence_grounded,
+                    record.citation_grounded,
+                    record.failure_category,
+                    record.fallback_reason,
+                    record.policy_rejection,
+                    record.elapsed_ms,
+                ),
+            )
+            assessment_id = cursor.lastrowid
+            self._connection.executemany(
+                """INSERT INTO shadow_stage_provenance (assessment_id, stage, status, invoked, prior_role_level,
+                proposed_role_level, confidence, model, error_category, fallback_reason, tool_names,
+                retrieval_count, source_ids, diagnostics) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    (
+                        assessment_id,
+                        stage.stage,
+                        stage.status,
+                        int(stage.invoked),
+                        stage.prior_role_level,
+                        stage.proposed_role_level,
+                        stage.confidence,
+                        stage.model,
+                        stage.error_category,
+                        stage.fallback_reason,
+                        json.dumps(stage.tool_names),
+                        stage.retrieval_count,
+                        json.dumps(stage.source_ids),
+                        json.dumps(stage.diagnostic_fields),
+                    )
+                    for stage in record.stages
+                ),
+            )
+            cutoff = _timestamp_text(_utc_now() - timedelta(days=retention_days))
+            assert cutoff is not None
+            self._connection.execute(
+                "DELETE FROM shadow_assessments WHERE observed_at < ?", (cutoff,)
+            )
+
+    def record_shadow_run_summary(self, summary: Any) -> None:
+        if self._read_only:
+            raise RuntimeError("cannot record shadow summary through a read-only repository")
+        with self._connection:
+            self._connection.execute(
+                """INSERT INTO shadow_run_summary (run_at, considered, selected, skipped, attempted, succeeded,
+                fallbacks, policy_rejections, rag_used, tool_calls, disagreements) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    _timestamp_text(summary.observed_at),
+                    summary.considered,
+                    summary.selected,
+                    json.dumps(summary.skipped),
+                    summary.attempted,
+                    summary.succeeded,
+                    summary.fallbacks,
+                    summary.policy_rejections,
+                    summary.rag_used,
+                    summary.tool_calls,
+                    summary.disagreements,
+                ),
+            )
+            self._connection.execute(
+                "DELETE FROM shadow_run_summary WHERE id NOT IN (SELECT id FROM shadow_run_summary ORDER BY id DESC LIMIT 30)"
+            )
+
+    def shadow_status(self) -> sqlite3.Row | None:
+        try:
+            return self._connection.execute(  # type: ignore[no-any-return]
+                """SELECT
+                (SELECT COUNT(*) FROM shadow_assessments) AS persisted,
+                (SELECT MAX(run_at) FROM shadow_run_summary) AS last_run,
+                (SELECT COALESCE(SUM(status = 'succeeded'), 0) FROM shadow_assessments) AS succeeded,
+                (SELECT COALESCE(SUM(status = 'fallback'), 0) FROM shadow_assessments) AS fallbacks,
+                (SELECT COALESCE(SUM(status = 'policy_rejected'), 0) FROM shadow_assessments)
+                    AS policy_rejections,
+                COALESCE((SELECT considered FROM shadow_run_summary ORDER BY id DESC LIMIT 1), 0)
+                    AS last_considered,
+                COALESCE((SELECT selected FROM shadow_run_summary ORDER BY id DESC LIMIT 1), 0)
+                    AS last_selected,
+                COALESCE((SELECT attempted FROM shadow_run_summary ORDER BY id DESC LIMIT 1), 0)
+                    AS last_attempted,
+                COALESCE((SELECT rag_used FROM shadow_run_summary ORDER BY id DESC LIMIT 1), 0)
+                    AS last_rag_retrievals,
+                COALESCE((SELECT tool_calls FROM shadow_run_summary ORDER BY id DESC LIMIT 1), 0)
+                    AS last_tool_calls,
+                COALESCE((SELECT disagreements FROM shadow_run_summary ORDER BY id DESC LIMIT 1), 0)
+                    AS last_disagreements"""
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+
+    def shadow_review_rows(
+        self, limit: int, since: datetime | None = None
+    ) -> tuple[sqlite3.Row, ...]:
+        query = """SELECT a.*, COALESCE(SUM(p.retrieval_count), 0) AS retrieval_count,
+        GROUP_CONCAT(DISTINCT p.stage) AS stages FROM shadow_assessments a
+        LEFT JOIN shadow_stage_provenance p ON p.assessment_id = a.id"""
+        params: list[object] = []
+        if since is not None:
+            query += " WHERE a.observed_at >= ?"
+            params.append(_timestamp_text(since))
+        query += " GROUP BY a.id ORDER BY (a.proposed_role_level IS NOT NULL AND a.proposed_role_level != a.deterministic_role_level) DESC, a.confidence DESC, a.id DESC LIMIT ?"
+        params.append(limit)
+        try:
+            return tuple(self._connection.execute(query, tuple(params)).fetchall())
+        except sqlite3.OperationalError:
+            return ()
+
+    def shadow_stage_rows(self, assessment_id: int) -> tuple[sqlite3.Row, ...]:
+        try:
+            return tuple(
+                self._connection.execute(
+                    "SELECT stage, status, proposed_role_level, confidence, tool_names, retrieval_count, source_ids FROM shadow_stage_provenance WHERE assessment_id = ? ORDER BY id",
+                    (assessment_id,),
+                ).fetchall()
+            )
+        except sqlite3.OperationalError:
+            return ()
+
     def listing_state_counts(self) -> ListingStateCounts:
         row = self._connection.execute(
             "SELECT COUNT(*) AS total_known, COALESCE(SUM(active), 0) AS active FROM job_state"
@@ -301,6 +486,62 @@ class JobStateRepository:
             """CREATE INDEX IF NOT EXISTS source_run_health_identity
             ON source_run_health (source_type, company, id DESC)"""
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS shadow_assessments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL, company TEXT NOT NULL, source_job_id TEXT NOT NULL,
+                observed_at TEXT NOT NULL, semantic_fingerprint TEXT NOT NULL,
+                deterministic_fingerprint TEXT NOT NULL, contract_fingerprint TEXT NOT NULL,
+                rag_fingerprint TEXT, routing_category TEXT NOT NULL, status TEXT NOT NULL,
+                title TEXT NOT NULL, description TEXT NOT NULL, location TEXT,
+                workplace_type TEXT, employment_type TEXT, apply_url TEXT NOT NULL,
+                deterministic_role_level TEXT NOT NULL, deterministic_role_family TEXT,
+                hard_blocked INTEGER NOT NULL, blocker_categories TEXT NOT NULL,
+                recommendation TEXT NOT NULL, proposed_role_level TEXT,
+                proposed_role_family TEXT, confidence REAL, evidence_grounded INTEGER,
+                citation_grounded INTEGER, failure_category TEXT, fallback_reason TEXT,
+                policy_rejection TEXT, elapsed_ms REAL
+            )
+            """
+        )
+        self._connection.execute(
+            """CREATE INDEX IF NOT EXISTS shadow_assessments_dedupe
+            ON shadow_assessments (
+                source, company, source_job_id, semantic_fingerprint,
+                deterministic_fingerprint, contract_fingerprint
+            )"""
+        )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS shadow_stage_provenance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, assessment_id INTEGER NOT NULL,
+                stage TEXT NOT NULL, status TEXT NOT NULL, invoked INTEGER NOT NULL,
+                prior_role_level TEXT NOT NULL, proposed_role_level TEXT,
+                confidence REAL, model TEXT, error_category TEXT, fallback_reason TEXT,
+                tool_names TEXT NOT NULL, retrieval_count INTEGER NOT NULL,
+                source_ids TEXT NOT NULL, diagnostics TEXT NOT NULL,
+                FOREIGN KEY (assessment_id) REFERENCES shadow_assessments(id)
+                    ON DELETE CASCADE
+            )
+            """
+        )
+        self._connection.execute(
+            """CREATE INDEX IF NOT EXISTS shadow_stage_provenance_assessment
+            ON shadow_stage_provenance (assessment_id, id)"""
+        )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS shadow_run_summary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, run_at TEXT NOT NULL,
+                considered INTEGER NOT NULL, selected INTEGER NOT NULL, skipped TEXT NOT NULL,
+                attempted INTEGER NOT NULL, succeeded INTEGER NOT NULL,
+                fallbacks INTEGER NOT NULL, policy_rejections INTEGER NOT NULL,
+                rag_used INTEGER NOT NULL, tool_calls INTEGER NOT NULL,
+                disagreements INTEGER NOT NULL
+            )
+            """
+        )
 
     def _ensure_summary_columns(self) -> None:
         existing = {
@@ -308,14 +549,14 @@ class JobStateRepository:
         }
         if "sources_authoritative" not in existing:
             self._connection.execute(
-                "ALTER TABLE monitor_run_summary ADD COLUMN sources_authoritative INTEGER NOT NULL DEFAULT 0"  # noqa: E501
+                "ALTER TABLE monitor_run_summary ADD COLUMN sources_authoritative INTEGER NOT NULL DEFAULT 0"
             )
             self._connection.execute(
                 "UPDATE monitor_run_summary SET sources_authoritative = sources_successful"
             )
         if "sources_degraded" not in existing:
             self._connection.execute(
-                "ALTER TABLE monitor_run_summary ADD COLUMN sources_degraded INTEGER NOT NULL DEFAULT 0"  # noqa: E501
+                "ALTER TABLE monitor_run_summary ADD COLUMN sources_degraded INTEGER NOT NULL DEFAULT 0"
             )
 
     def _validate_snapshot(
@@ -391,7 +632,7 @@ class JobStateRepository:
             row["source_job_id"] for row in rows if row["source_job_id"] not in observed_keys
         ]
         self._connection.executemany(
-            """UPDATE job_state SET active = 0 WHERE source = ? AND company = ? AND source_job_id = ?""",  # noqa: E501
+            """UPDATE job_state SET active = 0 WHERE source = ? AND company = ? AND source_job_id = ?""",
             ((source_type, company, source_job_id) for source_job_id in unseen_ids),
         )
 

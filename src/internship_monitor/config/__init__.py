@@ -26,6 +26,7 @@ from internship_monitor.config.models import (
     RolePreferences,
     SearchConfiguration,
     SearchProfile,
+    ShadowIntelligenceConfiguration,
     StructuredAssessmentConfiguration,
     WhatsAppNotificationConfig,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "RolePreferences",
     "SearchConfiguration",
     "SearchProfile",
+    "ShadowIntelligenceConfiguration",
     "StructuredAssessmentConfiguration",
     "WhatsAppNotificationConfig",
     "load_company_allowlist",

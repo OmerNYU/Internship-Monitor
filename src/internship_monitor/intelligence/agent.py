@@ -56,6 +56,7 @@ class AgentRoleVerdict(BaseModel):
     confidence: float = Field(ge=0, le=1)
     evidence: tuple[str, ...] = Field(min_length=1, max_length=3)
     context_ids: tuple[str, ...] = Field(min_length=1, max_length=4)
+    role_family: str | None = Field(default=None, max_length=80)
 
 
 class OllamaAdjudicationClient:
@@ -259,6 +260,7 @@ class AgenticAdjudicationProvider:
                 ("confidence", verdict.confidence),
                 ("evidence_grounded", evidence_grounded),
                 ("citation_grounded", citation_grounded),
+                ("proposed_role_family", verdict.role_family),
             )
             if verdict.confidence < self._configuration.intelligence.agent.minimum_confidence:
                 raise AgentError(
@@ -311,6 +313,7 @@ class AgenticAdjudicationProvider:
                     evidence,
                     proposed_role_level=verdict.role_level,
                     invoked=True,
+                    diagnostic_fields=(*diagnostic, ("policy_validation_success", True)),
                 ),
             )
         except (AgentError, StructuredAssessmentError, httpx.HTTPError, ValueError) as error:

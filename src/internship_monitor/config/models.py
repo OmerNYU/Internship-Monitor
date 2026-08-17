@@ -236,6 +236,15 @@ class AgentConfiguration(StrictConfigModel):
     minimum_score: int = Field(default=40, ge=0, le=100)
 
 
+class ShadowIntelligenceConfiguration(StrictConfigModel):
+    """Explicit local-only shadow collection settings; disabled by default."""
+
+    enabled: bool = False
+    max_assessments_per_run: int = Field(default=24, ge=1, le=100)
+    retention_days: int = Field(default=180, ge=1, le=3650)
+    semantic_contract_version: NonEmptyString = "semantic-shadow-v1"
+
+
 class IntelligenceConfiguration(StrictConfigModel):
     """Optional local intelligence boundary, separate from deterministic assessment policy."""
 
@@ -247,6 +256,7 @@ class IntelligenceConfiguration(StrictConfigModel):
         default_factory=StructuredAssessmentConfiguration
     )
     agent: AgentConfiguration = Field(default_factory=AgentConfiguration)
+    shadow: ShadowIntelligenceConfiguration = Field(default_factory=ShadowIntelligenceConfiguration)
 
 
 class SearchConfiguration(StrictConfigModel):

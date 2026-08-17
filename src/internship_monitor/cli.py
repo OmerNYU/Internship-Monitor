@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from internship_monitor import __version__
 from internship_monitor.adapters import SourceRunFailure
@@ -75,6 +76,7 @@ from internship_monitor.reporting.service import (
     monitor_run_summary,
 )
 from internship_monitor.reporting.status import system_status
+from internship_monitor.shadow import ShadowRunner, ShadowRunSummary
 from internship_monitor.state import JobStateRepository, ListingChange
 
 
@@ -123,6 +125,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also validate notifier configuration structurally without sending anything.",
     )
+    review_parser = subparsers.add_parser(
+        "intelligence-review-candidates",
+        help="Read persisted shadow candidates for explicit human review.",
+    )
+    review_parser.add_argument("--state", type=Path, default=Path("state/jobs.sqlite3"))
+    review_parser.add_argument("--limit", type=int, default=20)
+    review_parser.add_argument("--since")
+    review_parser.add_argument("--json", action="store_true", dest="json_output")
+    review_parser.add_argument("--export", type=Path)
+    review_parser.add_argument("--include-descriptions", action="store_true")
     run_parser = subparsers.add_parser(
         "run",
         help="Fetch, assess, group, and optionally persist configured sources.",
@@ -177,6 +189,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to local queued-notification state.",
     )
 
+    run_parser.add_argument(
+        "--shadow-intelligence",
+        action="store_true",
+        help="Run the explicitly enabled local intelligence stack in shadow mode only.",
+    )
+    run_parser.add_argument(
+        "--rag-index",
+        type=Path,
+        default=Path("state/rag.sqlite3"),
+        help="Private local RAG index used only by --shadow-intelligence.",
+    )
+    run_parser.add_argument(
+        "--embedding-cache",
+        type=Path,
+        default=Path("state/embeddings.sqlite3"),
+        help="Private local embedding cache used only by --shadow-intelligence.",
+    )
     evaluate_parser = subparsers.add_parser(
         "evaluate",
         help="Run an offline gold-dataset benchmark without discovery, state, or delivery.",
@@ -349,6 +378,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "evaluate":
         return _evaluate_command(args, parser)
 
+    if args.command == "intelligence-review-candidates":
+        return _review_candidates_command(args, parser)
     if args.command == "status":
         print(_status_summary(system_status(args.state, args.notification_state)))
         return 0
@@ -369,12 +400,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _deliver_command(args, parser)
 
     if args.command == "run":
+        shadow_summary: ShadowRunSummary | None = None
         if args.dry_run and args.queue_notifications:
             parser.error("--queue-notifications cannot be used with --dry-run")
         if args.export_listings and not args.dry_run:
             parser.error("--export-listings requires --dry-run")
         search_configuration = load_search_configuration(args.profile)
         company_allowlist = load_company_allowlist(args.companies)
+        if args.shadow_intelligence and (
+            not search_configuration.intelligence.enabled
+            or not search_configuration.intelligence.shadow.enabled
+        ):
+            parser.error(
+                "--shadow-intelligence requires intelligence.enabled and "
+                "intelligence.shadow.enabled in the loaded profile"
+            )
         if args.dry_run:
             with JobStateRepository(args.state, read_only=True) as repository:
                 result = asyncio.run(
@@ -390,6 +430,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 except ListingExportError as error:
                     parser.error(str(error))
             print(_run_summary(result, dry_run=True))
+            if args.shadow_intelligence:
+                shadow_summary = ShadowRunner(
+                    search_configuration,
+                    rag_index=args.rag_index,
+                    embedding_cache=args.embedding_cache,
+                ).collect(result.assessments, result.observations, None, persist=False)
+                print(_shadow_summary(shadow_summary, persisted=False))
             if args.export_listings:
                 print(
                     "Canonical listing export complete: "
@@ -408,6 +455,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     repository=repository,
                 )
             )
+            if args.shadow_intelligence:
+                shadow_summary = ShadowRunner(
+                    search_configuration,
+                    rag_index=args.rag_index,
+                    embedding_cache=args.embedding_cache,
+                ).collect(result.assessments, result.observations, repository, persist=True)
             queued_count = 0
             if args.queue_notifications:
                 args.notification_state.parent.mkdir(parents=True, exist_ok=True)
@@ -431,6 +484,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         print(_run_summary(result, dry_run=False))
+        if shadow_summary is not None:
+            print(_shadow_summary(shadow_summary, persisted=True))
         if args.queue_notifications:
             print(
                 f"Notification scheduling complete: {queued_count} alerts queued; "
@@ -933,6 +988,21 @@ def _status_summary(status: SystemStatus) -> str:
             f"{status.last_monitor_run.listings_seen} listings seen, "
             f"{status.last_monitor_run.alerts_queued} alerts queued."
         )
+    if status.shadow is not None:
+        latest_shadow = status.shadow.last_run.isoformat() if status.shadow.last_run else "never"
+        sections.append(
+            "Shadow intelligence: "
+            f"{status.shadow.persisted} persisted, succeeded={status.shadow.succeeded}, "
+            f"fallbacks={status.shadow.fallbacks}, "
+            f"policy rejections={status.shadow.policy_rejections}; last run={latest_shadow}, "
+            f"considered={status.shadow.last_considered}, selected={status.shadow.last_selected}, "
+            f"attempted={status.shadow.last_attempted}, "
+            f"RAG retrievals={status.shadow.last_rag_retrievals}, "
+            f"tool calls={status.shadow.last_tool_calls}, "
+            f"disagreements={status.shadow.last_disagreements}."
+        )
+    else:
+        sections.append("Shadow intelligence: no persisted observations.")
     if status.source_health:
         healthy = sum(item.status.value == "healthy" for item in status.source_health)
         degraded = sum(item.status.value == "degraded" for item in status.source_health)
@@ -972,3 +1042,121 @@ def _preflight_summary(report: PreflightReport) -> str:
     for check in checks:
         lines.append(f"{check.level.value} {check.name}: {check.detail}.")
     return "\n".join(lines)
+
+
+def _shadow_summary(summary: ShadowRunSummary, *, persisted: bool) -> str:
+    skipped = ", ".join(f"{kind}={count}" for kind, count in summary.skipped if count)
+    return (
+        f"Shadow intelligence: considered={summary.considered}, selected={summary.selected}, "
+        f"attempted={summary.attempted}, succeeded={summary.succeeded}, "
+        f"fallbacks={summary.fallbacks}, policy_rejections={summary.policy_rejections}, "
+        f"rag_retrievals={summary.rag_used}, tool_calls={summary.tool_calls}, "
+        f"disagreements={summary.disagreements}, skipped={skipped or 'none'}; "
+        f"{'persisted safely' if persisted else 'not persisted (dry run)'}."
+    )
+
+
+def _active_learning_priority(row: Any) -> tuple[int, tuple[str, ...]]:
+    """Return deterministic review priority without deriving human truth from AI output."""
+    values = row  # sqlite rows deliberately expose only persisted safe shadow fields.
+    score = 0
+    reasons: list[str] = []
+    if values["proposed_role_level"] not in {None, values["deterministic_role_level"]}:
+        score += 50
+        reasons.append("deterministic_provider_disagreement")
+    confidence = values["confidence"]
+    if isinstance(confidence, float) and confidence >= 0.8:
+        score += 15
+        reasons.append("high_confidence")
+    if values["status"] == "policy_rejected":
+        score += 25
+        reasons.append("policy_rejected_proposal")
+    if values["status"] == "fallback":
+        score += 20
+        reasons.append("provider_fallback")
+    if values["evidence_grounded"] == 0:
+        score += 20
+        reasons.append("ungrounded_verdict")
+    if values["routing_category"] in {"review_prior", "adjacent_role"}:
+        score += 10
+        reasons.append("context_dependent_role")
+    return score, tuple(reasons)
+
+
+def _review_candidates_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    if args.limit < 1 or args.limit > 200:
+        parser.error("--limit must be between 1 and 200")
+    since = None
+    if args.since:
+        try:
+            since = datetime.fromisoformat(args.since)
+        except ValueError:
+            parser.error("--since must be an ISO-8601 timestamp")
+    with JobStateRepository(args.state, read_only=True) as repository:
+        rows = repository.shadow_review_rows(args.limit * 5, since)
+        payload = []
+        for row in rows:
+            stages = repository.shadow_stage_rows(int(row["id"]))
+            source_ids = tuple(
+                sorted(
+                    {source_id for stage in stages for source_id in json.loads(stage["source_ids"])}
+                )
+            )
+            tools = tuple(
+                sorted({tool for stage in stages for tool in json.loads(stage["tool_names"])})
+            )
+            priority, selection_reasons = _active_learning_priority(row)
+            item = {
+                "schema_version": "shadow-review-candidate-v1",
+                "label_status": "not_labeled",
+                "listing_identity": f"{row['source']}:{row['company']}:{row['source_job_id']}",
+                "observed_at": row["observed_at"],
+                "company": row["company"],
+                "title": row["title"],
+                "source": row["source"],
+                "location": row["location"],
+                "apply_url": row["apply_url"],
+                "deterministic_role_level": row["deterministic_role_level"],
+                "proposed_role_level": row["proposed_role_level"],
+                "confidence": row["confidence"],
+                "routing_category": row["routing_category"],
+                "shadow_status": row["status"],
+                "failure_category": row["failure_category"],
+                "active_learning_priority": priority,
+                "selection_reasons": selection_reasons,
+                "retrieved_document_ids": source_ids,
+                "tool_names": tools,
+                "retrieval_count": row["retrieval_count"],
+            }
+            if args.include_descriptions and args.export:
+                item["description"] = row["description"]
+            payload.append(item)
+    payload.sort(key=lambda item: str(item["observed_at"]), reverse=True)
+    payload.sort(
+        key=lambda item: (
+            -int(item["active_learning_priority"]),
+            str(item["company"]).casefold(),
+            str(item["listing_identity"]),
+        )
+    )
+    payload = payload[: args.limit]
+    if args.export:
+        target = args.export.resolve()
+        allowed = Path("evaluation.local").resolve()
+        if allowed not in target.parents:
+            parser.error("--export must be beneath evaluation.local/")
+        if args.include_descriptions is False:
+            parser.error("--export requires --include-descriptions for private review snapshots")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            "".join(json.dumps(item, sort_keys=True) + "\\n" for item in payload), encoding="utf-8"
+        )
+    if args.json_output:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(f"Shadow review candidates: {len(payload)} returned; descriptions withheld.")
+        for item in payload:
+            print(
+                f"- {item['company']} | {item['title']} | {item['deterministic_role_level']} -> {item['proposed_role_level'] or 'no proposal'} | {item['shadow_status']}"  # noqa: E501
+            )
+    return 0
