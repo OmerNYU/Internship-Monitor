@@ -2,6 +2,12 @@
 
 from internship_monitor.notifications.base import Notifier
 from internship_monitor.notifications.console import ConsoleNotifier
+from internship_monitor.notifications.digest import (
+    DailyDigest,
+    DigestItem,
+    DigestSourceHealth,
+    ImmediateAlertRecapItem,
+)
 from internship_monitor.notifications.dispatcher import NotificationDispatcher
 from internship_monitor.notifications.email import EmailNotifier
 from internship_monitor.notifications.models import (
@@ -24,10 +30,14 @@ from internship_monitor.notifications.whatsapp import WhatsAppNotifier
 
 __all__ = [
     "ConsoleNotifier",
+    "DailyDigest",
     "DeliveryReport",
     "DeliveryStatus",
     "DigestCandidateState",
+    "DigestItem",
+    "DigestSourceHealth",
     "EmailNotifier",
+    "ImmediateAlertRecapItem",
     "Notification",
     "NotificationDispatcher",
     "NotificationKind",

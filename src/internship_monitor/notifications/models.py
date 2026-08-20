@@ -87,3 +87,6 @@ class QueuedNotification:
     digest_key: str | None = None
     candidate_state: DigestCandidateState | None = None
     digest_category: str | None = None
+    digest_payload: str | None = None
+    included_digest_key: str | None = None
+    digest_recap_key: str | None = None

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from internship_monitor.notifications.models import (
     DeliveryReport,
@@ -15,6 +17,8 @@ from internship_monitor.notifications.models import (
     QueueStatus,
 )
 from internship_monitor.reporting.models import DeliveryRunSummary, NotificationQueueCounts
+
+PAKISTAN_TIME = ZoneInfo("Asia/Karachi")
 
 
 def _utc_now() -> datetime:
@@ -59,6 +63,8 @@ class NotificationQueueRepository:
         kind: NotificationKind = NotificationKind.ALERT,
         digest_key: str | None = None,
         digest_category: str | None = None,
+        digest_payload: str | None = None,
+        digest_recap_key: str | None = None,
     ) -> bool:
         """Store a notification once, returning whether it was newly queued."""
         self._require_writable()
@@ -76,8 +82,9 @@ class NotificationQueueRepository:
                 """
                 INSERT OR IGNORE INTO notification_queue (
                     idempotency_key, subject, body, due_at, queued_at, attempts, status,
-                    next_attempt_at, kind, digest_key, candidate_state, digest_category
-                ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+                    next_attempt_at, kind, digest_key, candidate_state, digest_category,
+                   digest_payload, included_digest_key, digest_recap_key
+                ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
                 """,
                 (
                     notification.idempotency_key,
@@ -91,6 +98,8 @@ class NotificationQueueRepository:
                     digest_key,
                     candidate_state.value if candidate_state is not None else None,
                     digest_category,
+                    digest_payload,
+                    digest_recap_key,
                 ),
             )
         return cursor.rowcount == 1
@@ -102,7 +111,8 @@ class NotificationQueueRepository:
         rows = self._connection.execute(
             """
             SELECT idempotency_key, subject, body, due_at, queued_at, attempts, status,
-                   next_attempt_at, kind, digest_key, candidate_state, digest_category
+                   next_attempt_at, kind, digest_key, candidate_state, digest_category,
+                   digest_payload, included_digest_key, digest_recap_key
             FROM notification_queue
             WHERE status = ? AND kind IN (?, ?) AND next_attempt_at <= ?
             ORDER BY due_at, queued_at, idempotency_key
@@ -140,7 +150,8 @@ class NotificationQueueRepository:
         rows = self._connection.execute(
             """
             SELECT idempotency_key, subject, body, due_at, queued_at, attempts, status,
-                   next_attempt_at, kind, digest_key, candidate_state, digest_category
+                   next_attempt_at, kind, digest_key, candidate_state, digest_category,
+                   digest_payload, included_digest_key, digest_recap_key
             FROM notification_queue
             WHERE kind = ? AND digest_key = ? AND candidate_state = ?
             ORDER BY digest_category, queued_at, idempotency_key
@@ -153,20 +164,53 @@ class NotificationQueueRepository:
         ).fetchall()
         return tuple(_queued_notification(row) for row in rows)
 
+    def composition_candidates(
+        self, digest_key: str, *, now: datetime
+    ) -> tuple[QueuedNotification, ...]:
+        """Return all due pending candidates for one PKT digest, including catch-up."""
+        rows = self._connection.execute(
+            """
+            SELECT idempotency_key, subject, body, due_at, queued_at, attempts, status,
+                   next_attempt_at, kind, digest_key, candidate_state, digest_category,
+                   digest_payload, included_digest_key, digest_recap_key
+            FROM notification_queue
+            WHERE kind = ? AND candidate_state = ? AND due_at <= ? AND digest_key <= ?
+            ORDER BY digest_key, queued_at, idempotency_key
+            """,
+            (
+                NotificationKind.DIGEST_CANDIDATE.value,
+                DigestCandidateState.PENDING_DIGEST.value,
+                _timestamp_text(now),
+                digest_key,
+            ),
+        ).fetchall()
+        return tuple(_queued_notification(row) for row in rows)
+
+    def immediate_alert_recaps(self, digest_key: str) -> tuple[QueuedNotification, ...]:
+        rows = self._connection.execute(
+            """
+            SELECT idempotency_key, subject, body, due_at, queued_at, attempts, status,
+                   next_attempt_at, kind, digest_key, candidate_state, digest_category,
+                   digest_payload, included_digest_key, digest_recap_key
+            FROM notification_queue
+            WHERE kind = ? AND digest_recap_key = ?
+            ORDER BY queued_at, idempotency_key
+            """,
+            (NotificationKind.ALERT.value, digest_key),
+        ).fetchall()
+        return tuple(_queued_notification(row) for row in rows)
+
     def create_daily_digest(
         self,
         notification: Notification,
         candidates: tuple[QueuedNotification, ...],
         *,
+        digest_payload: str,
         due_at: datetime,
         queued_at: datetime | None = None,
     ) -> bool:
-        """Create one stable digest and retain its included candidates for auditability."""
+        """Atomically create one digest and mark its candidate membership."""
         self._require_writable()
-        if notification.idempotency_key != _digest_key_for_candidates(candidates):
-            raise ValueError("daily digest identity must match its candidates")
-        if not candidates:
-            return False
         _require_aware(due_at)
         queued = queued_at or _utc_now()
         _require_aware(queued)
@@ -177,8 +221,9 @@ class NotificationQueueRepository:
                 """
                 INSERT OR IGNORE INTO notification_queue (
                     idempotency_key, subject, body, due_at, queued_at, attempts, status,
-                    next_attempt_at, kind, digest_key, candidate_state, digest_category
-                ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, NULL, NULL)
+                    next_attempt_at, kind, digest_key, candidate_state, digest_category,
+                    digest_payload, included_digest_key, digest_recap_key
+                ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, NULL, NULL, ?, NULL, NULL)
                 """,
                 (
                     digest_key,
@@ -190,31 +235,47 @@ class NotificationQueueRepository:
                     _timestamp_text(due_at),
                     NotificationKind.DAILY_DIGEST.value,
                     digest_key,
+                    digest_payload,
                 ),
             )
             if cursor.rowcount != 1:
                 return False
-            placeholders = ", ".join("?" for _ in candidate_keys)
-            self._connection.execute(
-                f"""
-                UPDATE notification_queue
-                SET candidate_state = ?
-                WHERE idempotency_key IN ({placeholders}) AND candidate_state = ?
-                """,
-                (
-                    DigestCandidateState.INCLUDED_IN_DIGEST.value,
-                    *candidate_keys,
-                    DigestCandidateState.PENDING_DIGEST.value,
-                ),
-            )
+            if candidate_keys:
+                placeholders = ", ".join("?" for _ in candidate_keys)
+                self._connection.execute(
+                    f"""
+                    UPDATE notification_queue
+                    SET candidate_state = ?, included_digest_key = ?
+                    WHERE idempotency_key IN ({placeholders}) AND candidate_state = ?
+                    """,
+                    (
+                        DigestCandidateState.INCLUDED_IN_DIGEST.value,
+                        digest_key,
+                        *candidate_keys,
+                        DigestCandidateState.PENDING_DIGEST.value,
+                    ),
+                )
         return True
+
+    def latest_daily_digest(self) -> QueuedNotification | None:
+        row = self._connection.execute(
+            """
+            SELECT idempotency_key, subject, body, due_at, queued_at, attempts, status,
+                   next_attempt_at, kind, digest_key, candidate_state, digest_category,
+                   digest_payload, included_digest_key, digest_recap_key
+            FROM notification_queue WHERE kind = ? ORDER BY queued_at DESC LIMIT 1
+            """,
+            (NotificationKind.DAILY_DIGEST.value,),
+        ).fetchone()
+        return _queued_notification(row) if row is not None else None
 
     def get(self, idempotency_key: str) -> QueuedNotification | None:
         """Return one queued notification without exposing provider configuration."""
         row = self._connection.execute(
             """
             SELECT idempotency_key, subject, body, due_at, queued_at, attempts, status,
-                   next_attempt_at, kind, digest_key, candidate_state, digest_category
+                   next_attempt_at, kind, digest_key, candidate_state, digest_category,
+                   digest_payload, included_digest_key, digest_recap_key
             FROM notification_queue
             WHERE idempotency_key = ?
             """,
@@ -279,7 +340,7 @@ class NotificationQueueRepository:
                     """
                     UPDATE notification_queue
                     SET candidate_state = ?
-                    WHERE kind = ? AND digest_key = ? AND candidate_state = ?
+                    WHERE kind = ? AND included_digest_key = ? AND candidate_state = ?
                     """,
                     (
                         DigestCandidateState.DIGEST_DELIVERED.value,
@@ -334,6 +395,22 @@ class NotificationQueueRepository:
             ),
         ).fetchone()
         assert row is not None
+        latest = self.latest_daily_digest()
+        latest_candidates = 0
+        if latest is not None and latest.digest_payload is not None:
+            try:
+                latest_candidates = int(
+                    json.loads(latest.digest_payload).get("total_included_opportunities", 0)
+                )
+            except (TypeError, ValueError, json.JSONDecodeError):
+                latest_candidates = 0
+        local = moment.astimezone(PAKISTAN_TIME)
+        if (local.hour, local.minute) < (11, 0):
+            next_local = local.replace(hour=11, minute=0, second=0, microsecond=0)
+        else:
+            next_local = (local + timedelta(days=1)).replace(
+                hour=11, minute=0, second=0, microsecond=0
+            )
         return NotificationQueueCounts(
             due_now=int(row["due_now"]),
             scheduled=int(row["scheduled"]),
@@ -341,6 +418,10 @@ class NotificationQueueRepository:
             terminal_failures=int(row["terminal_failures"]),
             digest_candidates=int(row["digest_candidates"]),
             delivered=int(row["delivered"]),
+            latest_digest_key=latest.digest_key if latest is not None else None,
+            latest_digest_status=latest.status.value if latest is not None else None,
+            latest_digest_candidates=latest_candidates,
+            next_digest_eligible_at=next_local,
         )
 
     def record_delivery_summary(self, summary: DeliveryRunSummary) -> None:
@@ -414,7 +495,10 @@ class NotificationQueueRepository:
                 kind TEXT NOT NULL DEFAULT 'alert',
                 digest_key TEXT,
                 candidate_state TEXT,
-                digest_category TEXT
+                digest_category TEXT,
+                digest_payload TEXT,
+                included_digest_key TEXT,
+                digest_recap_key TEXT
             )
             """
         )
@@ -441,6 +525,9 @@ class NotificationQueueRepository:
             "digest_key": "TEXT",
             "candidate_state": "TEXT",
             "digest_category": "TEXT",
+            "digest_payload": "TEXT",
+            "included_digest_key": "TEXT",
+            "digest_recap_key": "TEXT",
         }
         for name, definition in additions.items():
             if name not in columns:
@@ -485,6 +572,9 @@ def _queued_notification(row: sqlite3.Row) -> QueuedNotification:
         digest_key=row["digest_key"],
         candidate_state=candidate_state,
         digest_category=row["digest_category"],
+        digest_payload=row["digest_payload"],
+        included_digest_key=row["included_digest_key"],
+        digest_recap_key=row["digest_recap_key"],
     )
 
 

@@ -260,3 +260,42 @@ class CliTests(TestCase):
             self.assertIn("Successful source state was persisted", output.getvalue())
             self.assertIn("no notifications were sent", output.getvalue())
             self.assertTrue(state_path.exists())
+
+    def test_digest_preview_is_read_only_and_compose_empty_sends_nothing(self) -> None:
+        with TemporaryDirectory() as directory:
+            state_path = Path(directory) / "state" / "jobs.sqlite3"
+            notification_state_path = Path(directory) / "state" / "notifications.sqlite3"
+            preview_output = StringIO()
+            with redirect_stdout(preview_output):
+                preview_exit = main(
+                    [
+                        "digest-preview",
+                        "--state",
+                        str(state_path),
+                        "--notification-state",
+                        str(notification_state_path),
+                        "--json",
+                    ]
+                )
+            self.assertEqual(preview_exit, 0)
+            self.assertIn("not_eligible_or_empty", preview_output.getvalue())
+            self.assertFalse(state_path.exists())
+            self.assertFalse(notification_state_path.exists())
+
+            compose_output = StringIO()
+            with redirect_stdout(compose_output):
+                compose_exit = main(
+                    [
+                        "digest-compose",
+                        "--state",
+                        str(state_path),
+                        "--notification-state",
+                        str(notification_state_path),
+                        "--json",
+                    ]
+                )
+
+            self.assertEqual(compose_exit, 0)
+            self.assertIn('"created": 0', compose_output.getvalue())
+            with NotificationQueueRepository(notification_state_path, read_only=True) as repository:
+                self.assertIsNone(repository.latest_daily_digest())

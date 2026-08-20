@@ -86,6 +86,12 @@ jobs:
             --notification-state state/notifications.sqlite3 \
             --queue-notifications
 
+      - name: Compose daily digest (observation only)
+        run: |
+          internship-monitor digest-compose \
+            --state state/jobs.sqlite3 \
+            --notification-state state/notifications.sqlite3
+
       - name: Emit operational summary
         run: |
           internship-monitor status \

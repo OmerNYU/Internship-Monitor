@@ -34,7 +34,12 @@ from internship_monitor.notifications import (
     QueueStatus,
 )
 from internship_monitor.opportunities import MatchConfidence, OpportunityGroup
-from internship_monitor.state import ListingChange, ListingObservation
+from internship_monitor.state import (
+    ListingChange,
+    ListingObservation,
+    SourceHealthStatus,
+    SourceHealthSummary,
+)
 
 PKT = ZoneInfo("Asia/Karachi")
 
@@ -226,11 +231,11 @@ class NotificationSchedulingTests(TestCase):
         assert digest is not None
         self.assertEqual(digest.kind, NotificationKind.DAILY_DIGEST)
         self.assertEqual(digest.notification.idempotency_key, "daily_digest:2026-08-13")
-        self.assertIn("Strong candidates (1)", digest.notification.body)
-        self.assertIn("Review manually (1)", digest.notification.body)
+        self.assertIn("Strong actionable opportunities (1)", digest.notification.body)
+        self.assertIn("Manual review (1)", digest.notification.body)
         self.assertLess(
-            digest.notification.body.index("Strong candidates"),
-            digest.notification.body.index("Review manually"),
+            digest.notification.body.index("Strong actionable opportunities"),
+            digest.notification.body.index("Manual review"),
         )
         self.assertTrue(
             all(
@@ -373,3 +378,191 @@ class NotificationSchedulingTests(TestCase):
 
         assert stored is not None
         self.assertEqual(stored.status, QueueStatus.DELIVERED)
+
+    def test_digest_catchup_recaps_and_source_health_are_persisted_once(self) -> None:
+        old_due = datetime(2026, 8, 12, 11, tzinfo=PKT)
+        moment = datetime(2026, 8, 13, 11, tzinfo=PKT)
+        health = (
+            SourceHealthSummary(
+                source_type="lever",
+                company="Healthy Co",
+                status=SourceHealthStatus.HEALTHY,
+                authoritative=True,
+                listing_count=3,
+                previous_active_count=3,
+                attempt_count=1,
+                duration_ms=25,
+                failure_category=None,
+                observed_at=moment,
+                last_authoritative_success_at=moment,
+                recent_issue_count=0,
+            ),
+            SourceHealthSummary(
+                source_type="lever",
+                company="Broken Co",
+                status=SourceHealthStatus.FAILED,
+                authoritative=False,
+                listing_count=0,
+                previous_active_count=7,
+                attempt_count=2,
+                duration_ms=50,
+                failure_category="malformed_payload",
+                observed_at=moment,
+                last_authoritative_success_at=None,
+                recent_issue_count=1,
+            ),
+        )
+        scheduler = NotificationScheduler()
+        with (
+            TemporaryDirectory() as directory,
+            NotificationQueueRepository(Path(directory) / "notifications.sqlite3") as repository,
+        ):
+            old = scheduler.queue(
+                (
+                    decision(
+                        identifier="old",
+                        action=AlertAction.QUEUE_DIGEST,
+                        due_at=old_due,
+                        recommendation=Recommendation.MANUAL_REVIEW,
+                    ),
+                ),
+                repository,
+                now=old_due,
+            )
+            scheduler.queue(
+                (
+                    decision(
+                        identifier="immediate",
+                        action=AlertAction.SEND_IMMEDIATELY,
+                        due_at=datetime(2026, 8, 13, 10, 30, tzinfo=PKT),
+                    ),
+                ),
+                repository,
+                now=datetime(2026, 8, 13, 10, 30, tzinfo=PKT),
+            )
+            transient = scheduler.preview_daily_digest(repository, now=moment, source_health=health)
+            created = scheduler.compose_due_digests(repository, now=moment, source_health=health)
+            repeated = scheduler.compose_due_digests(repository, now=moment, source_health=health)
+            stored = repository.get("daily_digest:2026-08-13")
+            old_stored = repository.get(old[0].notification.idempotency_key)
+
+        assert transient is not None
+        self.assertEqual(transient.total_included_opportunities, 1)
+        self.assertEqual(len(created), 1)
+        self.assertEqual(repeated, ())
+        assert stored is not None
+        self.assertIn("catch-up from 2026-08-12", stored.notification.body)
+        self.assertIn("Immediate-alert recap (1)", stored.notification.body)
+        self.assertIn("1 healthy, 0 degraded, 1 failed", stored.notification.body)
+        self.assertIn("Broken Co (lever) — failed: malformed_payload", stored.notification.body)
+        self.assertNotIn("private upstream exception", stored.notification.body)
+        assert old_stored is not None
+        self.assertEqual(old_stored.included_digest_key, "daily_digest:2026-08-13")
+
+    def test_digest_before_eleven_does_not_compose_early(self) -> None:
+        due_at = datetime(2026, 8, 13, 11, tzinfo=PKT)
+        before = datetime(2026, 8, 13, 10, 59, tzinfo=PKT)
+        scheduler = NotificationScheduler()
+        with (
+            TemporaryDirectory() as directory,
+            NotificationQueueRepository(Path(directory) / "notifications.sqlite3") as repository,
+        ):
+            scheduler.queue(
+                (decision(action=AlertAction.QUEUE_DIGEST, due_at=due_at),),
+                repository,
+                now=before,
+            )
+            self.assertIsNone(scheduler.preview_daily_digest(repository, now=before))
+            self.assertEqual(scheduler.compose_due_digests(repository, now=before), ())
+            self.assertIsNone(repository.get("daily_digest:2026-08-13"))
+            self.assertEqual(len(scheduler.compose_due_digests(repository, now=due_at)), 1)
+            self.assertIsNotNone(repository.get("daily_digest:2026-08-13"))
+
+    def test_preview_due_does_not_include_shadow_or_mutate_digest_candidates(self) -> None:
+        due_at = datetime(2026, 8, 13, 11, tzinfo=PKT)
+        scheduler = NotificationScheduler()
+        with (
+            TemporaryDirectory() as directory,
+            NotificationQueueRepository(Path(directory) / "notifications.sqlite3") as repository,
+        ):
+            queued = scheduler.queue(
+                (decision(action=AlertAction.QUEUE_DIGEST, due_at=due_at),),
+                repository,
+                now=datetime(2026, 8, 13, 8, tzinfo=PKT),
+            )
+            preview = scheduler.preview_due(repository, now=due_at)
+            stored = repository.get(queued[0].notification.idempotency_key)
+
+        self.assertEqual(len(preview), 1)
+        assert stored is not None
+        self.assertEqual(stored.candidate_state, DigestCandidateState.PENDING_DIGEST)
+
+    def test_immediate_alert_after_eleven_is_recapped_next_day(self) -> None:
+        moment = datetime(2026, 8, 13, 12, tzinfo=PKT)
+        with (
+            TemporaryDirectory() as directory,
+            NotificationQueueRepository(Path(directory) / "notifications.sqlite3") as repository,
+        ):
+            queued = NotificationScheduler().queue(
+                (
+                    decision(
+                        identifier="after-eleven",
+                        action=AlertAction.SEND_IMMEDIATELY,
+                        due_at=moment,
+                    ),
+                ),
+                repository,
+                now=moment,
+            )
+
+        self.assertEqual(queued[0].digest_recap_key, "daily_digest:2026-08-14")
+
+    def test_failed_digest_retries_the_same_logical_key(self) -> None:
+        due_at = datetime(2026, 8, 13, 11, tzinfo=PKT)
+        scheduler = NotificationScheduler()
+        notifier = FailingNotifier()
+        with (
+            TemporaryDirectory() as directory,
+            NotificationQueueRepository(Path(directory) / "notifications.sqlite3") as repository,
+        ):
+            scheduler.queue(
+                (decision(action=AlertAction.QUEUE_DIGEST, due_at=due_at),),
+                repository,
+                now=due_at,
+            )
+            first = asyncio.run(scheduler.deliver_due(repository, (notifier,), now=due_at))
+            stored = repository.get("daily_digest:2026-08-13")
+            second = asyncio.run(
+                scheduler.deliver_due(repository, (notifier,), now=due_at + timedelta(minutes=15))
+            )
+            repeated = repository.get("daily_digest:2026-08-13")
+
+        self.assertEqual(len(first), 1)
+        self.assertEqual(len(second), 1)
+        assert stored is not None
+        assert repeated is not None
+        self.assertEqual(stored.status, QueueStatus.PENDING)
+        self.assertEqual(repeated.notification.idempotency_key, stored.notification.idempotency_key)
+        self.assertEqual(repeated.attempts, 2)
+
+    def test_legacy_candidate_without_snapshot_does_not_crash_composition(self) -> None:
+        due_at = datetime(2026, 8, 13, 11, tzinfo=PKT)
+        legacy = notification("legacy")
+        with (
+            TemporaryDirectory() as directory,
+            NotificationQueueRepository(Path(directory) / "notifications.sqlite3") as repository,
+        ):
+            repository.enqueue(
+                legacy,
+                due_at=due_at,
+                queued_at=due_at,
+                kind=NotificationKind.DIGEST_CANDIDATE,
+                digest_key="daily_digest:2026-08-13",
+                digest_category="strong_candidate",
+            )
+            created = NotificationScheduler().compose_due_digests(repository, now=due_at)
+            stored = repository.get(legacy.idempotency_key)
+
+        self.assertEqual(created, ())
+        assert stored is not None
+        self.assertEqual(stored.candidate_state, DigestCandidateState.PENDING_DIGEST)

@@ -63,6 +63,7 @@ from internship_monitor.notifications import (
     WhatsAppNotifier,
     notification_from_decision,
 )
+from internship_monitor.notifications.digest import notification_from_daily_digest
 from internship_monitor.orchestration import (
     MonitoringRunResult,
     run_configured_dry_run,
@@ -77,7 +78,7 @@ from internship_monitor.reporting.service import (
 )
 from internship_monitor.reporting.status import system_status
 from internship_monitor.shadow import ShadowRunner, ShadowRunSummary
-from internship_monitor.state import JobStateRepository, ListingChange
+from internship_monitor.state import JobStateRepository, ListingChange, SourceHealthSummary
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -357,6 +358,34 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("state/notifications.sqlite3"),
         help="Path to local queued-notification state.",
     )
+    deliver_parser.add_argument(
+        "--state",
+        type=Path,
+        default=Path("state/jobs.sqlite3"),
+        help="Path to listing state used only for safe digest source-health context.",
+    )
+    digest_preview_parser = subparsers.add_parser(
+        "digest-preview",
+        help="Read the current daily digest without queue mutation or delivery.",
+    )
+    digest_preview_parser.add_argument("--state", type=Path, default=Path("state/jobs.sqlite3"))
+    digest_preview_parser.add_argument(
+        "--notification-state",
+        type=Path,
+        default=Path("state/notifications.sqlite3"),
+    )
+    digest_preview_parser.add_argument("--json", action="store_true", dest="json_output")
+    digest_compose_parser = subparsers.add_parser(
+        "digest-compose",
+        help="Persist one eligible logical digest without loading notifiers or sending.",
+    )
+    digest_compose_parser.add_argument("--state", type=Path, default=Path("state/jobs.sqlite3"))
+    digest_compose_parser.add_argument(
+        "--notification-state",
+        type=Path,
+        default=Path("state/notifications.sqlite3"),
+    )
+    digest_compose_parser.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
 
@@ -398,6 +427,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "deliver":
         return _deliver_command(args, parser)
+
+    if args.command == "digest-preview":
+        return _digest_preview_command(args)
+
+    if args.command == "digest-compose":
+        return _digest_compose_command(args)
 
     if args.command == "run":
         shadow_summary: ShadowRunSummary | None = None
@@ -900,11 +935,74 @@ def _notification_preview_summary(result: MonitoringRunResult) -> str:
     )
 
 
+def _digest_source_health(state_path: Path) -> tuple[SourceHealthSummary, ...]:
+    if not state_path.exists():
+        return ()
+    with JobStateRepository(state_path, read_only=True) as repository:
+        return repository.source_health_summaries()
+
+
+def _digest_preview_command(args: argparse.Namespace) -> int:
+    source_health = _digest_source_health(args.state)
+    with NotificationQueueRepository(args.notification_state, read_only=True) as repository:
+        digest = NotificationScheduler().preview_daily_digest(
+            repository,
+            source_health=source_health,
+        )
+    if args.json_output:
+        print(
+            json.dumps(
+                {
+                    "status": "available" if digest is not None else "not_eligible_or_empty",
+                    "digest": digest.as_dict() if digest is not None else None,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    elif digest is None:
+        print("No daily digest is currently eligible: before 11:00 PKT, empty, or already absent.")
+    else:
+        print(notification_from_daily_digest(digest).body)
+    return 0
+
+
+def _digest_compose_command(args: argparse.Namespace) -> int:
+    source_health = _digest_source_health(args.state)
+    args.notification_state.parent.mkdir(parents=True, exist_ok=True)
+    with NotificationQueueRepository(args.notification_state) as repository:
+        created = NotificationScheduler().compose_due_digests(
+            repository,
+            source_health=source_health,
+        )
+    if args.json_output:
+        print(
+            json.dumps(
+                {
+                    "created": len(created),
+                    "digest_keys": [item.notification.idempotency_key for item in created],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    elif created:
+        print(
+            "Digest composition complete: "
+            f"{len(created)} logical digest created; no notifications sent."
+        )
+    else:
+        print("No eligible daily digest was composed; no notifications sent.")
+    return 0
+
+
 def _deliver_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     scheduler = NotificationScheduler()
     if args.dry_run:
         with NotificationQueueRepository(args.notification_state, read_only=True) as repository:
-            notifications = scheduler.preview_due(repository)
+            notifications = scheduler.preview_due(
+                repository, source_health=_digest_source_health(args.state)
+            )
         for notification in notifications:
             asyncio.run(ConsoleNotifier().send(notification))
         print(
@@ -918,7 +1016,11 @@ def _deliver_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
     if not notifiers:
         parser.error("external delivery requires at least one enabled email or WhatsApp notifier")
     with NotificationQueueRepository(args.notification_state) as repository:
-        reports = asyncio.run(scheduler.deliver_due(repository, notifiers))
+        reports = asyncio.run(
+            scheduler.deliver_due(
+                repository, notifiers, source_health=_digest_source_health(args.state)
+            )
+        )
         states = tuple(repository.get(report.notification.idempotency_key) for report in reports)
         delivered = sum(
             state is not None and state.status is QueueStatus.DELIVERED for state in states
@@ -980,6 +1082,19 @@ def _status_summary(status: SystemStatus) -> str:
             f"digest candidates={status.notifications.digest_candidates}, "
             f"delivered={status.notifications.delivered}."
         )
+        latest_digest = (
+            f"{status.notifications.latest_digest_key} "
+            f"({status.notifications.latest_digest_status}, "
+            f"{status.notifications.latest_digest_candidates} candidates)"
+            if status.notifications.latest_digest_key is not None
+            else "none"
+        )
+        next_digest = (
+            status.notifications.next_digest_eligible_at.isoformat()
+            if status.notifications.next_digest_eligible_at is not None
+            else "unknown"
+        )
+        sections.append(f"Daily digest: latest={latest_digest}; next eligibility={next_digest}.")
     if status.last_monitor_run is not None:
         sections.append(
             "Last monitor run: "

@@ -61,6 +61,10 @@ class NotificationQueueCounts:
     terminal_failures: int
     digest_candidates: int
     delivered: int
+    latest_digest_key: str | None = None
+    latest_digest_status: str | None = None
+    latest_digest_candidates: int = 0
+    next_digest_eligible_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
