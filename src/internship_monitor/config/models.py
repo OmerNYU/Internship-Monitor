@@ -313,6 +313,7 @@ class EmailNotificationConfig(StrictConfigModel):
     enabled: bool = False
     sender: NonEmptyString | None = None
     recipient: NonEmptyString | None = None
+    test_recipient: NonEmptyString | None = None
     smtp_host: NonEmptyString = "smtp.gmail.com"
     smtp_port: int = Field(default=587, ge=1, le=65535)
     password_env_var: NonEmptyString = "INTERNSHIP_MONITOR_EMAIL_PASSWORD"

@@ -292,6 +292,7 @@ class NotificationQueueRepository:
         *,
         now: datetime | None = None,
         lease_duration: timedelta = timedelta(minutes=5),
+        idempotency_key: str | None = None,
     ) -> ClaimedDelivery | None:
         """Atomically lease one due logical notification for one external channel."""
         self._require_writable()
@@ -315,6 +316,7 @@ class NotificationQueueRepository:
                 WHERE status != ?
                   AND kind IN (?, ?)
                   AND due_at <= ?
+                  AND (? IS NULL OR idempotency_key = ?)
                 ORDER BY due_at, queued_at, idempotency_key
                 LIMIT 1
                 """,
@@ -323,6 +325,8 @@ class NotificationQueueRepository:
                     NotificationKind.ALERT.value,
                     NotificationKind.DAILY_DIGEST.value,
                     timestamp,
+                    idempotency_key,
+                    idempotency_key,
                 ),
             ).fetchone()
             if row is None:

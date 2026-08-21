@@ -57,6 +57,7 @@ from internship_monitor.intelligence import (
 from internship_monitor.notifications import (
     ConsoleNotifier,
     EmailNotifier,
+    Notification,
     NotificationDispatcher,
     NotificationQueueRepository,
     NotificationScheduler,
@@ -126,6 +127,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--delivery-readiness",
         action="store_true",
         help="Also validate notifier configuration structurally without sending anything.",
+    )
+    preflight_parser.add_argument(
+        "--delivery",
+        action="store_true",
+        dest="delivery_readiness",
+        help="Alias for --delivery-readiness; never authenticates or sends.",
     )
     review_parser = subparsers.add_parser(
         "intelligence-review-candidates",
@@ -370,6 +377,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("state/jobs.sqlite3"),
         help="Path to listing state used only for safe digest source-health context.",
     )
+    test_delivery_parser = subparsers.add_parser(
+        "deliver-test",
+        help="Send one explicitly queued TEST email only to email.test_recipient.",
+    )
+    test_delivery_parser.add_argument(
+        "--notifications",
+        type=Path,
+        default=Path("config.local/notifications.yaml"),
+    )
+    test_delivery_parser.add_argument(
+        "--notification-state",
+        type=Path,
+        default=Path("state/notifications.sqlite3"),
+    )
+    test_delivery_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Render the TEST message locally without writing queue state or sending.",
+    )
     digest_preview_parser = subparsers.add_parser(
         "digest-preview",
         help="Read the current daily digest without queue mutation or delivery.",
@@ -433,6 +459,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "deliver":
         return _deliver_command(args, parser)
+
+    if args.command == "deliver-test":
+        return _deliver_test_command(args, parser)
 
     if args.command == "digest-preview":
         return _digest_preview_command(args)
@@ -1070,6 +1099,56 @@ def _deliver_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
         f"{retrying} retrying, {failed} terminal failures."
     )
     return 0
+
+
+_TEST_DELIVERY_KEY = "delivery-test:email:v1"
+
+
+def _test_notification() -> Notification:
+    return Notification(
+        idempotency_key=_TEST_DELIVERY_KEY,
+        decision=None,
+        subject="[TEST] Internship Monitor controlled email delivery",
+        body=(
+            "TEST ONLY - this is an explicit controlled email-delivery check. "
+            "It is not an internship alert or digest, and it affects no listing state."
+        ),
+    )
+
+
+def _deliver_test_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    notification = _test_notification()
+    if args.dry_run:
+        print(f"TEST delivery preview: {notification.subject}")
+        print("No queue state changed and no email was sent.")
+        return 0
+    configuration = load_notification_configuration(args.notifications)
+    email = configuration.email
+    if not email.enabled:
+        parser.error("deliver-test requires email.enabled")
+    if email.test_recipient is None:
+        parser.error("deliver-test requires email.test_recipient")
+    args.notification_state.parent.mkdir(parents=True, exist_ok=True)
+    test_email = email.model_copy(update={"recipient": email.test_recipient})
+    with NotificationQueueRepository(args.notification_state) as repository:
+        repository.enqueue(notification, due_at=_utc_now(), queued_at=_utc_now())
+        report = asyncio.run(
+            NotificationScheduler().deliver_notification(
+                repository, EmailNotifier(test_email), notification.idempotency_key
+            )
+        )
+        stored = repository.get(notification.idempotency_key)
+    if report is None:
+        print("TEST delivery already completed or not currently due; no email was sent.")
+        return 0
+    if stored is not None and stored.status is QueueStatus.DELIVERED:
+        print("TEST delivery completed and recorded for the email channel.")
+        return 0
+    print(
+        "TEST delivery was attempted and is retained for safe retry; "
+        "inspect status before retrying."
+    )
+    return 1
 
 
 def _external_notifiers(

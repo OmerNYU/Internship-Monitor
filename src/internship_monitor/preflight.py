@@ -152,8 +152,22 @@ def _delivery_check(notifications_path: Path | None) -> PreflightCheck:
         )
     if not configuration.email.enabled and not configuration.whatsapp.enabled:
         return PreflightCheck("delivery", PreflightLevel.FAIL, "no external notifier is enabled")
+    if configuration.email.enabled:
+        credential = os.getenv(configuration.email.password_env_var)
+        if credential is None or not credential.strip():
+            return PreflightCheck(
+                "delivery",
+                PreflightLevel.FAIL,
+                "email credential environment variable is unavailable",
+            )
+        if configuration.email.test_recipient is None:
+            return PreflightCheck(
+                "delivery",
+                PreflightLevel.WARN,
+                "email is structurally ready; controlled test delivery needs email.test_recipient",
+            )
     return PreflightCheck(
         "delivery",
         PreflightLevel.PASS,
-        "notifier configuration is structurally valid; no message was sent",
+        "notifier configuration and required email credential are present; no message was sent",
     )

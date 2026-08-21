@@ -4,6 +4,8 @@ email:
   enabled: false
   sender: internship-monitor-sender@example.com
   recipient: personal-recipient@example.com
+  # Required only by the explicit deliver-test command.
+  test_recipient: personal-test-recipient@example.com
   smtp_host: smtp.gmail.com
   smtp_port: 587
   # The password belongs in the environment, never in YAML or source control.

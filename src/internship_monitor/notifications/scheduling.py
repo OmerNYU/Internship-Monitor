@@ -205,6 +205,26 @@ class NotificationScheduler:
                 reports.append(report)
         return tuple(reports)
 
+    async def deliver_notification(
+        self,
+        repository: NotificationQueueRepository,
+        notifier: Notifier,
+        idempotency_key: str,
+        *,
+        now: datetime | None = None,
+        dispatcher: NotificationDispatcher | None = None,
+    ) -> DeliveryReport | None:
+        """Deliver one explicitly identified queue record without touching other work."""
+        moment = now or _utc_now()
+        _require_aware(moment)
+        claim = repository.claim_due(notifier.name, now=moment, idempotency_key=idempotency_key)
+        if claim is None:
+            return None
+        delivery_dispatcher = dispatcher or NotificationDispatcher()
+        report = await delivery_dispatcher.deliver(claim.queued.notification, (notifier,))
+        repository.complete_claim(claim, report.results[0], completed_at=moment)
+        return report
+
 
 def _daily_digest_key(due_at: datetime) -> str:
     return f"daily_digest:{due_at.astimezone(PAKISTAN_TIME).date().isoformat()}"

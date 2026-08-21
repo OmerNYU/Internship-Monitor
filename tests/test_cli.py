@@ -103,10 +103,21 @@ class CliTests(TestCase):
                 )
 
     def test_status_reports_opportunity_grouping_is_ready(self) -> None:
-        output = StringIO()
+        with TemporaryDirectory() as directory:
+            state_path = Path(directory) / "state" / "jobs.sqlite3"
+            notification_state_path = Path(directory) / "state" / "notifications.sqlite3"
+            output = StringIO()
 
-        with redirect_stdout(output):
-            exit_code = main(["status"])
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "status",
+                        "--state",
+                        str(state_path),
+                        "--notification-state",
+                        str(notification_state_path),
+                    ]
+                )
 
         self.assertEqual(exit_code, 0)
         self.assertIn(__version__, output.getvalue())
