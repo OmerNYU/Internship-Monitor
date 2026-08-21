@@ -11,6 +11,7 @@ from internship_monitor.notifications.digest import (
 from internship_monitor.notifications.dispatcher import NotificationDispatcher
 from internship_monitor.notifications.email import EmailNotifier
 from internship_monitor.notifications.models import (
+    ClaimedDelivery,
     DeliveryReport,
     DeliveryStatus,
     DigestCandidateState,
@@ -29,6 +30,7 @@ from internship_monitor.notifications.scheduling import NotificationScheduler
 from internship_monitor.notifications.whatsapp import WhatsAppNotifier
 
 __all__ = [
+    "ClaimedDelivery",
     "ConsoleNotifier",
     "DailyDigest",
     "DeliveryReport",

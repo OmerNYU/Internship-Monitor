@@ -40,6 +40,28 @@ class StateBundleTests(TestCase):
             create_state_manifest(restored)
             validate_state_bundle(restored)
 
+    def test_manifest_is_an_explicit_operational_database_allowlist(self) -> None:
+        with TemporaryDirectory() as directory:
+            state = self._create_state(Path(directory))
+            (state / "config.local").write_text("secret", encoding="utf-8")
+            (state / "rag.sqlite3").write_bytes(b"private")
+            manifest = json.loads((state / "manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(set(manifest["files"]), {"jobs.sqlite3", "notifications.sqlite3"})
+        self.assertNotIn("config.local", manifest["files"])
+        self.assertNotIn("rag.sqlite3", manifest["files"])
+
+    def test_missing_state_is_rejected_without_overwriting_prior_good_bundle(self) -> None:
+        with TemporaryDirectory() as directory:
+            state = self._create_state(Path(directory))
+            good_manifest = (state / "manifest.json").read_bytes()
+            (state / "notifications.sqlite3").unlink()
+
+            with self.assertRaisesRegex(StateBundleError, "missing"):
+                validate_state_bundle(state)
+
+            self.assertEqual((state / "manifest.json").read_bytes(), good_manifest)
+
     def test_checksum_mismatch_is_rejected_before_sqlite_is_opened(self) -> None:
         with TemporaryDirectory() as directory:
             state = self._create_state(Path(directory))

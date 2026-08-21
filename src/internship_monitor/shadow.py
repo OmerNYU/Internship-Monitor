@@ -8,6 +8,7 @@ import hashlib
 import json
 import sqlite3
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -22,6 +23,7 @@ from internship_monitor.intelligence import (
     LocalRagRetriever,
     StructuredLLMAssessmentProvider,
 )
+from internship_monitor.intelligence.providers import OllamaHealthProvider
 from internship_monitor.models import JobListing
 
 if TYPE_CHECKING:
@@ -97,6 +99,8 @@ class ShadowRunSummary:
     rag_used: int
     tool_calls: int
     disagreements: int
+    run_status: str = "completed"
+    effective_limit: int = 0
 
 
 def semantic_fingerprint(listing: JobListing) -> str:
@@ -227,7 +231,17 @@ class ShadowRunner:
         repository: JobStateRepository | None,
         *,
         persist: bool,
+        limit: int | None = None,
+        progress: Callable[[str], None] | None = None,
+        preflight: bool = False,
     ) -> ShadowRunSummary:
+        effective_limit = (
+            limit
+            if limit is not None
+            else self._configuration.intelligence.shadow.max_assessments_per_run
+        )
+        if not 1 <= effective_limit <= 24:
+            raise ValueError("shadow limit must be between 1 and 24")
         rag_version = rag_fingerprint(
             self._rag_index, self._configuration.intelligence.embedding.model
         )
@@ -235,10 +249,35 @@ class ShadowRunner:
         selected, skipped = _route(
             assessments,
             observations,
-            self._configuration.intelligence.shadow.max_assessments_per_run,
+            effective_limit,
         )
+        if progress is not None:
+            progress(
+                f"Shadow intelligence: selected {len(selected)}/{len(assessments)} candidates."
+            )
+        if preflight and selected and not self._provider_ready():
+            skipped["provider_unavailable"] += len(selected)
+            run = ShadowRunSummary(
+                datetime.now(UTC),
+                len(assessments),
+                len(selected),
+                tuple(sorted(skipped.items())),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            )
+            if persist and repository is not None:
+                repository.record_shadow_run_summary(run)
+            if progress is not None:
+                progress("Shadow intelligence: provider unavailable; batch skipped.")
+            return run
         summary = Counter[str]()
-        for prior, routing in selected:
+        consecutive_unavailable = 0
+        for index, (prior, routing) in enumerate(selected, start=1):
             semantic = semantic_fingerprint(prior.job)
             deterministic = _deterministic_fingerprint(prior)
             if (
@@ -250,8 +289,14 @@ class ShadowRunner:
             ):
                 skipped["deduplicated"] += 1
                 continue
+            if progress is not None:
+                progress(f"Shadow {index}/{len(selected)}: {prior.job.company} | {prior.job.title}")
             record = self._observe(prior, routing, semantic, deterministic, contract, rag_version)
             summary[record.status] += 1
+            if record.failure_category in {"provider_unreachable", "model_missing"}:
+                consecutive_unavailable += 1
+            else:
+                consecutive_unavailable = 0
             summary["attempted"] += 1
             summary["rag_used"] += sum(stage.retrieval_count for stage in record.stages)
             summary["tool_calls"] += sum(len(stage.tool_names) for stage in record.stages)
@@ -262,6 +307,14 @@ class ShadowRunner:
                 repository.record_shadow_assessment(
                     record, self._configuration.intelligence.shadow.retention_days
                 )
+            if progress is not None:
+                progress(
+                    f"Shadow {index}/{len(selected)} complete: {record.status} "
+                    f"({(record.elapsed_ms or 0) / 1000:.1f}s)"
+                )
+            if consecutive_unavailable >= 2:
+                skipped["provider_batch_aborted"] += len(selected) - index
+                break
         run = ShadowRunSummary(
             datetime.now(UTC),
             len(assessments),
@@ -274,10 +327,25 @@ class ShadowRunner:
             summary["rag_used"],
             summary["tool_calls"],
             summary["disagreements"],
+            "failed" if consecutive_unavailable >= 2 else "completed",
+            effective_limit,
         )
         if persist and repository is not None:
             repository.record_shadow_run_summary(run)
         return run
+
+    def _provider_ready(self) -> bool:
+        health = OllamaHealthProvider(
+            self._configuration.intelligence.ollama, enabled=True
+        ).health()
+        if not health.is_available:
+            return False
+        required = {
+            self._configuration.intelligence.embedding.model,
+            self._configuration.intelligence.structured_assessment.model,
+            self._configuration.intelligence.agent.model,
+        }
+        return required.issubset(set(health.installed_models))
 
     def _observe(
         self,

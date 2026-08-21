@@ -206,7 +206,9 @@ class JobStateRepository:
             row = self._connection.execute(
                 """SELECT 1 FROM shadow_assessments WHERE source = ? AND company = ?
                 AND source_job_id = ? AND semantic_fingerprint = ?
-                AND deterministic_fingerprint = ? AND contract_fingerprint = ? LIMIT 1""",
+                AND deterministic_fingerprint = ? AND contract_fingerprint = ?
+                AND (status = "succeeded" OR (status = "policy_rejected" AND proposed_role_level IS NOT NULL))
+                LIMIT 1""",
                 (
                     listing.source,
                     listing.company,
@@ -304,7 +306,8 @@ class JobStateRepository:
         with self._connection:
             self._connection.execute(
                 """INSERT INTO shadow_run_summary (run_at, considered, selected, skipped, attempted, succeeded,
-                fallbacks, policy_rejections, rag_used, tool_calls, disagreements) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                fallbacks, policy_rejections, rag_used, tool_calls, disagreements, status,
+                effective_limit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     _timestamp_text(summary.observed_at),
                     summary.considered,
@@ -317,6 +320,8 @@ class JobStateRepository:
                     summary.rag_used,
                     summary.tool_calls,
                     summary.disagreements,
+                    summary.run_status,
+                    summary.effective_limit,
                 ),
             )
             self._connection.execute(
@@ -356,9 +361,14 @@ class JobStateRepository:
         GROUP_CONCAT(DISTINCT p.stage) AS stages FROM shadow_assessments a
         LEFT JOIN shadow_stage_provenance p ON p.assessment_id = a.id"""
         params: list[object] = []
+        clauses = [
+            "(a.proposed_role_level IS NOT NULL OR COALESCE(a.failure_category, '') NOT IN "
+            "('provider_unreachable', 'model_missing', 'timeout', 'retrieval_unavailable'))"
+        ]
         if since is not None:
-            query += " WHERE a.observed_at >= ?"
+            clauses.append("a.observed_at >= ?")
             params.append(_timestamp_text(since))
+        query += " WHERE " + " AND ".join(clauses)
         query += " GROUP BY a.id ORDER BY (a.proposed_role_level IS NOT NULL AND a.proposed_role_level != a.deterministic_role_level) DESC, a.confidence DESC, a.id DESC LIMIT ?"
         params.append(limit)
         try:
@@ -538,10 +548,26 @@ class JobStateRepository:
                 attempted INTEGER NOT NULL, succeeded INTEGER NOT NULL,
                 fallbacks INTEGER NOT NULL, policy_rejections INTEGER NOT NULL,
                 rag_used INTEGER NOT NULL, tool_calls INTEGER NOT NULL,
-                disagreements INTEGER NOT NULL
+                disagreements INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT "completed",
+                effective_limit INTEGER NOT NULL DEFAULT 0
             )
             """
         )
+        self._ensure_shadow_run_columns()
+
+    def _ensure_shadow_run_columns(self) -> None:
+        existing = {
+            row[1] for row in self._connection.execute("PRAGMA table_info(shadow_run_summary)")
+        }
+        if "status" not in existing:
+            self._connection.execute(
+                "ALTER TABLE shadow_run_summary ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'"
+            )
+        if "effective_limit" not in existing:
+            self._connection.execute(
+                "ALTER TABLE shadow_run_summary ADD COLUMN effective_limit INTEGER NOT NULL DEFAULT 0"
+            )
 
     def _ensure_summary_columns(self) -> None:
         existing = {

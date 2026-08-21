@@ -198,10 +198,11 @@ class NotificationScheduler:
         self.compose_due_digests(repository, now=moment, source_health=source_health)
         delivery_dispatcher = dispatcher or NotificationDispatcher()
         reports: list[DeliveryReport] = []
-        for queued in repository.due(now=moment):
-            report = await delivery_dispatcher.deliver(queued.notification, notifiers)
-            repository.record_delivery(report, attempted_at=moment)
-            reports.append(report)
+        for notifier in notifiers:
+            while claim := repository.claim_due(notifier.name, now=moment):
+                report = await delivery_dispatcher.deliver(claim.queued.notification, (notifier,))
+                repository.complete_claim(claim, report.results[0], completed_at=moment)
+                reports.append(report)
         return tuple(reports)
 
 

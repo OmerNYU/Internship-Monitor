@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
 from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -194,6 +195,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--shadow-intelligence",
         action="store_true",
         help="Run the explicitly enabled local intelligence stack in shadow mode only.",
+    )
+    run_parser.add_argument(
+        "--shadow-limit",
+        type=int,
+        help="Override the configured shadow candidate cap for this run only (1-24).",
     )
     run_parser.add_argument(
         "--rag-index",
@@ -450,6 +456,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "--shadow-intelligence requires intelligence.enabled and "
                 "intelligence.shadow.enabled in the loaded profile"
             )
+        if args.shadow_limit is not None:
+            if not args.shadow_intelligence:
+                parser.error("--shadow-limit requires --shadow-intelligence")
+            if not 1 <= args.shadow_limit <= 24:
+                parser.error("--shadow-limit must be between 1 and 24")
         if args.dry_run:
             with JobStateRepository(args.state, read_only=True) as repository:
                 result = asyncio.run(
@@ -470,7 +481,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     search_configuration,
                     rag_index=args.rag_index,
                     embedding_cache=args.embedding_cache,
-                ).collect(result.assessments, result.observations, None, persist=False)
+                ).collect(
+                    result.assessments,
+                    result.observations,
+                    None,
+                    persist=False,
+                    limit=args.shadow_limit,
+                    progress=lambda message: print(message, file=sys.stderr),
+                    preflight=True,
+                )
                 print(_shadow_summary(shadow_summary, persisted=False))
             if args.export_listings:
                 print(
@@ -495,7 +514,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     search_configuration,
                     rag_index=args.rag_index,
                     embedding_cache=args.embedding_cache,
-                ).collect(result.assessments, result.observations, repository, persist=True)
+                ).collect(
+                    result.assessments,
+                    result.observations,
+                    repository,
+                    persist=True,
+                    limit=args.shadow_limit,
+                    progress=lambda message: print(message, file=sys.stderr),
+                    preflight=True,
+                )
             queued_count = 0
             if args.queue_notifications:
                 args.notification_state.parent.mkdir(parents=True, exist_ok=True)
@@ -1078,6 +1105,8 @@ def _status_summary(status: SystemStatus) -> str:
             f"due now={status.notifications.due_now}, "
             f"scheduled={status.notifications.scheduled}, "
             f"retries pending={status.notifications.retries_pending}, "
+            f"claimed={status.notifications.claimed}, "
+            f"expired claims recoverable={status.notifications.expired_claims_recoverable}, "
             f"terminal failures={status.notifications.terminal_failures}, "
             f"digest candidates={status.notifications.digest_candidates}, "
             f"delivered={status.notifications.delivered}."

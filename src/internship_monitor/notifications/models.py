@@ -53,6 +53,7 @@ class QueueStatus(StrEnum):
     """The durable delivery state of one queued notification."""
 
     PENDING = "pending"
+    CLAIMED = "claimed"
     DELIVERED = "delivered"
     FAILED = "failed"
 
@@ -90,3 +91,14 @@ class QueuedNotification:
     digest_payload: str | None = None
     included_digest_key: str | None = None
     digest_recap_key: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimedDelivery:
+    """One channel-specific, lease-owned external delivery attempt."""
+
+    queued: QueuedNotification
+    channel: str
+    claim_token: str
+    claimed_at: datetime
+    claim_expires_at: datetime

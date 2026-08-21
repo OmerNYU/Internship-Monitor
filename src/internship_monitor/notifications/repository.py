@@ -6,10 +6,13 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from internship_monitor.notifications.models import (
+    ClaimedDelivery,
     DeliveryReport,
+    DeliveryStatus,
     DigestCandidateState,
     Notification,
     NotificationKind,
@@ -283,6 +286,232 @@ class NotificationQueueRepository:
         ).fetchone()
         return _queued_notification(row) if row is not None else None
 
+    def claim_due(
+        self,
+        channel: str,
+        *,
+        now: datetime | None = None,
+        lease_duration: timedelta = timedelta(minutes=5),
+    ) -> ClaimedDelivery | None:
+        """Atomically lease one due logical notification for one external channel."""
+        self._require_writable()
+        if not channel:
+            raise ValueError("delivery channel is required")
+        if lease_duration <= timedelta():
+            raise ValueError("lease duration must be positive")
+        moment = now or _utc_now()
+        _require_aware(moment)
+        token = str(uuid4())
+        expires = moment + lease_duration
+        timestamp = _timestamp_text(moment)
+        expiry = _timestamp_text(expires)
+        assert timestamp is not None and expiry is not None
+        connection = self._connection
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT idempotency_key FROM notification_queue
+                WHERE status != ?
+                  AND kind IN (?, ?)
+                  AND due_at <= ?
+                ORDER BY due_at, queued_at, idempotency_key
+                LIMIT 1
+                """,
+                (
+                    QueueStatus.FAILED.value,
+                    NotificationKind.ALERT.value,
+                    NotificationKind.DAILY_DIGEST.value,
+                    timestamp,
+                ),
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                return None
+            key = str(row["idempotency_key"])
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO notification_delivery (
+                    idempotency_key, channel, attempts, status, next_attempt_at
+                ) VALUES (?, ?, 0, ?, ?)
+                """,
+                (key, channel, QueueStatus.PENDING.value, timestamp),
+            )
+            claimed = connection.execute(
+                """
+                UPDATE notification_delivery
+                SET status = ?, attempts = attempts + 1, claimed_at = ?,
+                    claim_expires_at = ?, claim_token = ?, completed_at = NULL
+                WHERE idempotency_key = ? AND channel = ?
+                  AND (
+                    (status = ? AND next_attempt_at <= ?)
+                    OR (status = ? AND claim_expires_at <= ?)
+                  )
+                """,
+                (
+                    QueueStatus.CLAIMED.value,
+                    timestamp,
+                    expiry,
+                    token,
+                    key,
+                    channel,
+                    QueueStatus.PENDING.value,
+                    timestamp,
+                    QueueStatus.CLAIMED.value,
+                    timestamp,
+                ),
+            )
+            if claimed.rowcount != 1:
+                connection.rollback()
+                return None
+            attempt = connection.execute(
+                """
+                SELECT attempts FROM notification_delivery
+                WHERE idempotency_key = ? AND channel = ?
+                """,
+                (key, channel),
+            ).fetchone()
+            assert attempt is not None
+            connection.execute(
+                """
+                INSERT INTO delivery_attempt (
+                    idempotency_key, channel, attempt_number, claim_token, claimed_at,
+                    status, retry_eligible, next_due_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
+                """,
+                (
+                    key,
+                    channel,
+                    int(attempt["attempts"]),
+                    token,
+                    timestamp,
+                    QueueStatus.CLAIMED.value,
+                ),
+            )
+            connection.execute(
+                """
+                UPDATE notification_queue
+                SET status = ?, attempts = MAX(attempts, ?)
+                WHERE idempotency_key = ?
+                """,
+                (QueueStatus.CLAIMED.value, int(attempt["attempts"]), key),
+            )
+            queue_row = connection.execute(
+                """
+                SELECT idempotency_key, subject, body, due_at, queued_at, attempts, status,
+                       next_attempt_at, kind, digest_key, candidate_state, digest_category,
+                       digest_payload, included_digest_key, digest_recap_key
+                FROM notification_queue WHERE idempotency_key = ?
+                """,
+                (key,),
+            ).fetchone()
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        assert queue_row is not None
+        return ClaimedDelivery(
+            queued=_queued_notification(queue_row),
+            channel=channel,
+            claim_token=token,
+            claimed_at=moment,
+            claim_expires_at=expires,
+        )
+
+    def complete_claim(
+        self,
+        claim: ClaimedDelivery,
+        result: object,
+        *,
+        completed_at: datetime | None = None,
+        max_attempts: int = 3,
+        retry_delay: timedelta = timedelta(minutes=15),
+    ) -> QueueStatus:
+        """Record one owned channel result; stale or foreign claims cannot mutate state."""
+        self._require_writable()
+        if max_attempts < 1 or retry_delay <= timedelta():
+            raise ValueError("delivery retry settings are invalid")
+        moment = completed_at or _utc_now()
+        _require_aware(moment)
+        delivered = getattr(result, "status", None) == DeliveryStatus.DELIVERED
+        timestamp = _timestamp_text(moment)
+        assert timestamp is not None
+        connection = self._connection
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT attempts FROM notification_delivery
+                WHERE idempotency_key = ? AND channel = ? AND status = ? AND claim_token = ?
+                """,
+                (
+                    claim.queued.notification.idempotency_key,
+                    claim.channel,
+                    QueueStatus.CLAIMED.value,
+                    claim.claim_token,
+                ),
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                current = self.get(claim.queued.notification.idempotency_key)
+                if current is None:
+                    raise ValueError("claimed notification no longer exists")
+                return current.status
+            attempts = int(row["attempts"])
+            if delivered:
+                status = QueueStatus.DELIVERED
+                next_due = None
+                retry_eligible = False
+            elif attempts >= max_attempts:
+                status = QueueStatus.FAILED
+                next_due = None
+                retry_eligible = False
+            else:
+                status = QueueStatus.PENDING
+                next_due = moment + retry_delay * (2 ** (attempts - 1))
+                retry_eligible = True
+            connection.execute(
+                """
+                UPDATE notification_delivery
+                SET status = ?, next_attempt_at = ?, claim_token = NULL,
+                    claim_expires_at = NULL, completed_at = ?
+                WHERE idempotency_key = ? AND channel = ? AND claim_token = ?
+                """,
+                (
+                    status.value,
+                    _timestamp_text(next_due),
+                    timestamp,
+                    claim.queued.notification.idempotency_key,
+                    claim.channel,
+                    claim.claim_token,
+                ),
+            )
+            connection.execute(
+                """
+                UPDATE delivery_attempt SET completed_at = ?, status = ?, failure_category = ?,
+                       retry_eligible = ?, next_due_at = ?
+                WHERE idempotency_key = ? AND channel = ? AND claim_token = ?
+                """,
+                (
+                    timestamp,
+                    status.value,
+                    None if delivered else "provider_failed",
+                    int(retry_eligible),
+                    _timestamp_text(next_due),
+                    claim.queued.notification.idempotency_key,
+                    claim.channel,
+                    claim.claim_token,
+                ),
+            )
+            status = self._refresh_logical_delivery_state(
+                claim.queued.notification.idempotency_key, connection
+            )
+            connection.commit()
+            return status
+        except Exception:
+            connection.rollback()
+            raise
+
     def record_delivery(
         self,
         report: DeliveryReport,
@@ -378,7 +607,12 @@ class NotificationQueueRepository:
                 ), 0) AS retries_pending,
                 COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS terminal_failures,
                 COALESCE(SUM(CASE WHEN kind = ? THEN 1 ELSE 0 END), 0) AS digest_candidates,
-                COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS delivered
+                COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS delivered,
+                COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS claimed,
+                (
+                    SELECT COUNT(*) FROM notification_delivery
+                    WHERE status = ? AND claim_expires_at <= ?
+                ) AS expired_claims_recoverable
             FROM notification_queue
             """,
             (
@@ -392,6 +626,9 @@ class NotificationQueueRepository:
                 QueueStatus.FAILED.value,
                 NotificationKind.DIGEST_CANDIDATE.value,
                 QueueStatus.DELIVERED.value,
+                QueueStatus.CLAIMED.value,
+                QueueStatus.CLAIMED.value,
+                _timestamp_text(moment),
             ),
         ).fetchone()
         assert row is not None
@@ -422,6 +659,8 @@ class NotificationQueueRepository:
             latest_digest_status=latest.status.value if latest is not None else None,
             latest_digest_candidates=latest_candidates,
             next_digest_eligible_at=next_local,
+            claimed=int(row["claimed"]),
+            expired_claims_recoverable=int(row["expired_claims_recoverable"]),
         )
 
     def record_delivery_summary(self, summary: DeliveryRunSummary) -> None:
@@ -504,6 +743,50 @@ class NotificationQueueRepository:
         )
         self._connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS notification_delivery (
+                idempotency_key TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL,
+                next_attempt_at TEXT,
+                claimed_at TEXT,
+                claim_expires_at TEXT,
+                claim_token TEXT,
+                completed_at TEXT,
+                PRIMARY KEY (idempotency_key, channel),
+                FOREIGN KEY (idempotency_key) REFERENCES notification_queue(idempotency_key)
+                    ON DELETE CASCADE
+            )
+            """
+        )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS delivery_attempt (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                idempotency_key TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                attempt_number INTEGER NOT NULL,
+                claim_token TEXT NOT NULL,
+                claimed_at TEXT NOT NULL,
+                completed_at TEXT,
+                status TEXT NOT NULL,
+                failure_category TEXT,
+                retry_eligible INTEGER NOT NULL,
+                next_due_at TEXT,
+                UNIQUE (idempotency_key, channel, attempt_number),
+                FOREIGN KEY (idempotency_key) REFERENCES notification_queue(idempotency_key)
+                    ON DELETE CASCADE
+            )
+            """
+        )
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS notification_delivery_due
+            ON notification_delivery (channel, status, next_attempt_at)
+            """
+        )
+        self._connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS delivery_run_summary (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_at TEXT NOT NULL,
@@ -534,6 +817,60 @@ class NotificationQueueRepository:
                 self._connection.execute(
                     f"ALTER TABLE notification_queue ADD COLUMN {name} {definition}"
                 )
+
+    def _refresh_logical_delivery_state(
+        self, idempotency_key: str, connection: sqlite3.Connection
+    ) -> QueueStatus:
+        rows = connection.execute(
+            "SELECT status, attempts FROM notification_delivery WHERE idempotency_key = ?",
+            (idempotency_key,),
+        ).fetchall()
+        if not rows:
+            return QueueStatus.PENDING
+        states = {QueueStatus(row["status"]) for row in rows}
+        attempts = max(int(row["attempts"]) for row in rows)
+        if QueueStatus.DELIVERED in states:
+            status = QueueStatus.DELIVERED
+            next_due = None
+        elif QueueStatus.PENDING in states or QueueStatus.CLAIMED in states:
+            status = QueueStatus.PENDING
+            next_due = connection.execute(
+                """
+                SELECT MIN(next_attempt_at) FROM notification_delivery
+                WHERE idempotency_key = ? AND status = ?
+                """,
+                (idempotency_key, QueueStatus.PENDING.value),
+            ).fetchone()[0]
+        else:
+            status = QueueStatus.FAILED
+            next_due = None
+        connection.execute(
+            """
+            UPDATE notification_queue
+            SET status = ?, attempts = ?, next_attempt_at = ?
+            WHERE idempotency_key = ?
+            """,
+            (status.value, attempts, next_due, idempotency_key),
+        )
+        if status is QueueStatus.DELIVERED:
+            row = connection.execute(
+                "SELECT kind, digest_key FROM notification_queue WHERE idempotency_key = ?",
+                (idempotency_key,),
+            ).fetchone()
+            if row is not None and row["kind"] == NotificationKind.DAILY_DIGEST.value:
+                connection.execute(
+                    """
+                    UPDATE notification_queue SET candidate_state = ?
+                    WHERE kind = ? AND included_digest_key = ? AND candidate_state = ?
+                    """,
+                    (
+                        DigestCandidateState.DIGEST_DELIVERED.value,
+                        NotificationKind.DIGEST_CANDIDATE.value,
+                        row["digest_key"],
+                        DigestCandidateState.INCLUDED_IN_DIGEST.value,
+                    ),
+                )
+        return status
 
     def _require_writable(self) -> None:
         if self._read_only:

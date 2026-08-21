@@ -70,3 +70,13 @@ intended lifecycle is:
 shadow -> explicit human review -> independently labeled corpus -> evaluation ->
 optional promotion-only runtime -> fine-tuning only when justified
 ```
+
+## Operational safety (Session 28.4)
+
+run --shadow-intelligence --shadow-limit N accepts only 1..24 and changes no
+profile state. Explicit CLI shadow runs perform a cheap Ollama endpoint/model preflight
+before candidate inference; an unavailable provider skips the batch without creating
+per-listing fallback observations. Infrastructure-only, no-proposal observations stay in
+diagnostics but are excluded from ordinary human-review ranking and do not suppress a later
+healthy semantic reassessment. Progress is written only for explicit shadow runs and omits
+descriptions, prompts, model output, and retrieval excerpts.

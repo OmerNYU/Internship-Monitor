@@ -65,6 +65,8 @@ class NotificationQueueCounts:
     latest_digest_status: str | None = None
     latest_digest_candidates: int = 0
     next_digest_eligible_at: datetime | None = None
+    claimed: int = 0
+    expired_claims_recoverable: int = 0
 
 
 @dataclass(frozen=True, slots=True)
