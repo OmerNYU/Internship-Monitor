@@ -21,6 +21,7 @@ from internship_monitor.config import (
     load_company_allowlist,
     load_notification_configuration,
     load_search_configuration,
+    load_source_catalog,
 )
 from internship_monitor.evaluation import (
     AblationReport,
@@ -68,6 +69,7 @@ from internship_monitor.notifications import (
 from internship_monitor.notifications.digest import notification_from_daily_digest
 from internship_monitor.orchestration import (
     MonitoringRunResult,
+    configured_source_count,
     run_configured_dry_run,
     run_configured_monitoring_run,
 )
@@ -118,6 +120,9 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument(
         "--companies", type=Path, default=Path("config/companies.example.yaml")
     )
+    preflight_parser.add_argument(
+        "--catalog", type=Path, help="Shared source catalog; takes precedence over --companies."
+    )
     preflight_parser.add_argument("--state", type=Path, default=Path("state/jobs.sqlite3"))
     preflight_parser.add_argument(
         "--notification-state", type=Path, default=Path("state/notifications.sqlite3")
@@ -164,6 +169,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("config/companies.example.yaml"),
         help="Path to the validated company-allowlist YAML file.",
+    )
+    run_parser.add_argument(
+        "--catalog",
+        type=Path,
+        help="Path to a shared source-catalog YAML file; takes precedence over --companies.",
     )
     run_parser.add_argument(
         "--state",
@@ -453,6 +463,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             notification_state_path=args.notification_state,
             notifications_path=args.notifications,
             delivery_readiness=args.delivery_readiness,
+            catalog_path=args.catalog,
         )
         print(_preflight_summary(report))
         return 0 if report.ok else 1
@@ -476,7 +487,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.export_listings and not args.dry_run:
             parser.error("--export-listings requires --dry-run")
         search_configuration = load_search_configuration(args.profile)
-        company_allowlist = load_company_allowlist(args.companies)
+        company_allowlist = (
+            load_source_catalog(args.catalog)
+            if args.catalog is not None
+            else load_company_allowlist(args.companies)
+        )
         if args.shadow_intelligence and (
             not search_configuration.intelligence.enabled
             or not search_configuration.intelligence.shadow.enabled
@@ -568,9 +583,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 monitor_run_summary(
                     result,
                     run_at=_utc_now(),
-                    sources_configured=sum(
-                        company.enabled for company in company_allowlist.companies
-                    ),
+                    sources_configured=configured_source_count(company_allowlist),
                     alerts_queued=queued_count,
                 )
             )

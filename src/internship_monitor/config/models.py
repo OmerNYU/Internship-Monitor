@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from datetime import datetime
 from enum import StrEnum
 from ipaddress import ip_address
 from typing import Annotated, Self
@@ -259,14 +261,36 @@ class IntelligenceConfiguration(StrictConfigModel):
     shadow: ShadowIntelligenceConfiguration = Field(default_factory=ShadowIntelligenceConfiguration)
 
 
+class CompanyPreferences(StrictConfigModel):
+    """Optional user ranking hints; they never define the source universe."""
+
+    prioritized_companies: tuple[NonEmptyString, ...] = ()
+    excluded_companies: tuple[NonEmptyString, ...] = ()
+
+    @model_validator(mode="after")
+    def reject_duplicate_or_conflicting_companies(self) -> Self:
+        for field_name in ("prioritized_companies", "excluded_companies"):
+            duplicates = _duplicates(getattr(self, field_name))
+            if duplicates:
+                raise ValueError(f"{field_name} must be unique: {', '.join(duplicates)}")
+        excluded = {value.casefold() for value in self.excluded_companies}
+        conflicts = [value for value in self.prioritized_companies if value.casefold() in excluded]
+        if conflicts:
+            raise ValueError(
+                "companies cannot be both prioritized and excluded: " + ", ".join(conflicts)
+            )
+        return self
+
+
 class SearchConfiguration(StrictConfigModel):
-    """Complete per-user search configuration."""
+    """Complete per-user search configuration, separate from source-catalog facts."""
 
     profile: SearchProfile
     role_preferences: RolePreferences
     regional_strategy: RegionalStrategy
     authorization: AuthorizationConfig
     language_profile: LanguageProfile = Field(default_factory=LanguageProfile)
+    company_preferences: CompanyPreferences = Field(default_factory=CompanyPreferences)
     intelligence: IntelligenceConfiguration = Field(default_factory=IntelligenceConfiguration)
 
 
@@ -305,6 +329,143 @@ class CompanyAllowlist(StrictConfigModel):
         if duplicates:
             raise ValueError(f"company names must be unique: {', '.join(duplicates)}")
         return self
+
+
+class SourceProvider(StrEnum):
+    """Providers with a deliberately supported structured-board adapter."""
+
+    GREENHOUSE = "greenhouse"
+    LEVER = "lever"
+    ASHBY = "ashby"
+
+
+class SourceVerificationStatus(StrEnum):
+    """Catalog lifecycle states; only verified records can enter production monitoring."""
+
+    VERIFIED = "verified"
+    CANDIDATE = "candidate"
+    DISABLED = "disabled"
+    UNHEALTHY = "unhealthy"
+    RETIRED = "retired"
+
+
+class SourceCatalogEntry(StrictConfigModel):
+    """Provider-neutral, shared facts about one approved structured job-board source."""
+
+    source_id: NonEmptyString
+    canonical_employer_name: NonEmptyString
+    provider: SourceProvider
+    provider_board_id: NonEmptyString
+    careers_url: NonEmptyString | None = None
+    enabled: bool = False
+    discovery_provenance: NonEmptyString
+    verification_status: SourceVerificationStatus = SourceVerificationStatus.CANDIDATE
+    first_discovered_at: datetime | None = None
+    last_verified_at: datetime | None = None
+    country_hints: tuple[NonEmptyString, ...] = ()
+    metadata_version: int = Field(default=1, ge=1)
+
+    @model_validator(mode="after")
+    def validate_catalog_facts(self) -> Self:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", self.provider_board_id):
+            raise ValueError("provider_board_id contains unsupported characters")
+        if self.careers_url is not None:
+            parsed = urlparse(self.careers_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError("careers_url must be an absolute HTTP(S) URL")
+        duplicates = _duplicates(self.country_hints)
+        if duplicates:
+            raise ValueError(f"country_hints must be unique: {', '.join(duplicates)}")
+        for timestamp_name in ("first_discovered_at", "last_verified_at"):
+            timestamp = getattr(self, timestamp_name)
+            if timestamp is not None and (
+                timestamp.tzinfo is None or timestamp.utcoffset() is None
+            ):
+                raise ValueError(f"{timestamp_name} must include timezone information")
+        return self
+
+    @property
+    def is_monitored(self) -> bool:
+        """Return whether this catalog record is safe for normal source monitoring."""
+        return self.enabled and self.verification_status is SourceVerificationStatus.VERIFIED
+
+    def as_company_config(self) -> CompanyConfig:
+        """Bridge catalog facts to the legacy adapter contract during migration."""
+        return CompanyConfig(
+            name=self.canonical_employer_name,
+            enabled=self.is_monitored,
+            source=CompanySourceConfig(
+                type=self.provider.value, board_token=self.provider_board_id
+            ),
+        )
+
+
+class SourceCatalog(StrictConfigModel):
+    """Versioned shared catalog, intentionally independent of all user profile data."""
+
+    version: int = Field(default=1, ge=1)
+    sources: tuple[SourceCatalogEntry, ...]
+
+    @model_validator(mode="after")
+    def reject_duplicate_source_identities(self) -> Self:
+        source_ids: set[str] = set()
+        provider_identities: set[tuple[SourceProvider, str]] = set()
+        for source in self.sources:
+            source_id = source.source_id.casefold()
+            provider_identity = (source.provider, source.provider_board_id.casefold())
+            if source_id in source_ids:
+                raise ValueError("source_ids must be unique")
+            if provider_identity in provider_identities:
+                raise ValueError("provider and provider_board_id pairs must be unique")
+            source_ids.add(source_id)
+            provider_identities.add(provider_identity)
+        return self
+
+    def monitored_companies(self) -> tuple[CompanyConfig, ...]:
+        """Produce only validated, verified, explicitly enabled monitoring inputs."""
+        return tuple(source.as_company_config() for source in self.sources if source.is_monitored)
+
+    @classmethod
+    def from_legacy_allowlist(cls, allowlist: CompanyAllowlist) -> Self:
+        """Import legacy approved entries without copying historical user region preferences."""
+        sources: list[SourceCatalogEntry] = []
+        for company in allowlist.companies:
+            provider_name = company.source.type.casefold()
+            try:
+                provider = SourceProvider(provider_name)
+            except ValueError as error:
+                raise ValueError(
+                    f"legacy source type is not catalog-supported: {provider_name}"
+                ) from error
+            board_id = company.source.board_token
+            if board_id is None:
+                raise ValueError("legacy source is missing a board token")
+            sources.append(
+                SourceCatalogEntry(
+                    source_id=f"{provider.value}:{board_id.casefold()}",
+                    canonical_employer_name=company.name,
+                    provider=provider,
+                    provider_board_id=board_id,
+                    careers_url=_legacy_careers_url(provider, board_id),
+                    enabled=company.enabled,
+                    discovery_provenance="legacy_allowlist_import",
+                    verification_status=(
+                        SourceVerificationStatus.VERIFIED
+                        if company.enabled
+                        else SourceVerificationStatus.DISABLED
+                    ),
+                )
+            )
+        return cls(sources=tuple(sources))
+
+
+def _legacy_careers_url(provider: SourceProvider, board_id: str) -> str:
+    roots = {
+        SourceProvider.GREENHOUSE: "https://boards.greenhouse.io",
+        SourceProvider.LEVER: "https://jobs.lever.co",
+        SourceProvider.ASHBY: "https://jobs.ashbyhq.com",
+    }
+    return f"{roots[provider]}/{board_id}"
 
 
 class EmailNotificationConfig(StrictConfigModel):

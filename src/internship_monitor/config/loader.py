@@ -11,6 +11,7 @@ from internship_monitor.config.models import (
     CompanyAllowlist,
     NotificationConfiguration,
     SearchConfiguration,
+    SourceCatalog,
 )
 
 
@@ -55,6 +56,11 @@ def load_search_configuration(path: str | Path) -> SearchConfiguration:
 def load_company_allowlist(path: str | Path) -> CompanyAllowlist:
     """Load and validate an explicit company allowlist YAML file."""
     return _load_yaml(Path(path), CompanyAllowlist)
+
+
+def load_source_catalog(path: str | Path) -> SourceCatalog:
+    """Load a versioned shared source catalog without loading any user preferences."""
+    return _load_yaml(Path(path), SourceCatalog)
 
 
 def load_notification_configuration(path: str | Path) -> NotificationConfiguration:

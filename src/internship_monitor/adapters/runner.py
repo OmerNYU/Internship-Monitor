@@ -97,7 +97,15 @@ async def run_adapters(
     adapters: Sequence[SourceAdapter],
     *,
     now: Callable[[], datetime] = utc_now,
+    concurrency_limit: int = 16,
 ) -> tuple[SourceRunResult, ...]:
-    """Run adapters concurrently while preserving configured order in the returned results."""
-    tasks = [_run_adapter(adapter, now) for adapter in adapters]
-    return tuple(await asyncio.gather(*tasks))
+    """Run adapters with bounded concurrency while preserving configured result order."""
+    if concurrency_limit < 1:
+        raise ValueError("concurrency_limit must be at least one")
+    semaphore = asyncio.Semaphore(concurrency_limit)
+
+    async def run_bounded(adapter: SourceAdapter) -> SourceRunResult:
+        async with semaphore:
+            return await _run_adapter(adapter, now)
+
+    return tuple(await asyncio.gather(*(run_bounded(adapter) for adapter in adapters)))

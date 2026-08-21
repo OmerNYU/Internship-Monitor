@@ -68,20 +68,32 @@ jobs:
         env:
           PROFILE_CONFIG_YAML: ${{ secrets.INTERNSHIP_MONITOR_PROFILE_YAML }}
           COMPANIES_CONFIG_YAML: ${{ secrets.INTERNSHIP_MONITOR_COMPANIES_YAML }}
+          SOURCE_CATALOG_CONFIG_YAML: ${{ secrets.INTERNSHIP_MONITOR_SOURCE_CATALOG_YAML }}
         run: |
-          if [ -z "${PROFILE_CONFIG_YAML}" ] || [ -z "${COMPANIES_CONFIG_YAML}" ]; then
-            echo "Required monitor configuration secrets are unavailable." >&2
+          if [ -z "${PROFILE_CONFIG_YAML}" ]; then
+            echo "Required profile configuration secret is unavailable." >&2
             exit 1
           fi
           mkdir -p config.local
           printf '%s' "${PROFILE_CONFIG_YAML}" > config.local/profile.yaml
-          printf '%s' "${COMPANIES_CONFIG_YAML}" > config.local/companies.yaml
+          if [ -n "${SOURCE_CATALOG_CONFIG_YAML}" ]; then
+            printf '%s' "${SOURCE_CATALOG_CONFIG_YAML}" > config.local/source_catalog.yaml
+          elif [ -n "${COMPANIES_CONFIG_YAML}" ]; then
+            printf '%s' "${COMPANIES_CONFIG_YAML}" > config.local/companies.yaml
+          else
+            echo "A source catalog or legacy company configuration secret is required." >&2
+            exit 1
+          fi
 
       - name: Observe and queue
         run: |
+          source_option=(--companies config.local/companies.yaml)
+          if [ -f config.local/source_catalog.yaml ]; then
+            source_option=(--catalog config.local/source_catalog.yaml)
+          fi
           internship-monitor run \
             --profile config.local/profile.yaml \
-            --companies config.local/companies.yaml \
+            "${source_option[@]}" \
             --state state/jobs.sqlite3 \
             --notification-state state/notifications.sqlite3 \
             --queue-notifications

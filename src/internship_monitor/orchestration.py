@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 import httpx
 
 from internship_monitor.adapters import (
+    AshbyAdapter,
     GreenhouseAdapter,
     LeverAdapter,
     SourceAdapter,
@@ -20,7 +21,12 @@ from internship_monitor.adapters import (
 )
 from internship_monitor.alerts import AlertDecision, AlertPolicy
 from internship_monitor.analysis import DeterministicAssessor, JobAssessment
-from internship_monitor.config import CompanyAllowlist, CompanyConfig, SearchConfiguration
+from internship_monitor.config import (
+    CompanyAllowlist,
+    CompanyConfig,
+    SearchConfiguration,
+    SourceCatalog,
+)
 from internship_monitor.models import JobListing
 from internship_monitor.opportunities import OpportunityGroup, OpportunityGrouper
 from internship_monitor.state import (
@@ -32,6 +38,7 @@ from internship_monitor.state import (
 )
 
 AdapterFactory = Callable[[CompanyConfig], SourceAdapter]
+MonitoringSources = CompanyAllowlist | SourceCatalog
 
 
 def _utc_now() -> datetime:
@@ -97,7 +104,7 @@ class _UnsupportedSourceAdapter:
 
 async def run_dry_run(
     search_configuration: SearchConfiguration,
-    company_allowlist: CompanyAllowlist,
+    company_allowlist: MonitoringSources,
     *,
     adapter_factory: AdapterFactory,
     repository: JobStateRepository | None = None,
@@ -114,7 +121,7 @@ async def run_dry_run(
 
 async def run_persisted_run(
     search_configuration: SearchConfiguration,
-    company_allowlist: CompanyAllowlist,
+    company_allowlist: MonitoringSources,
     *,
     adapter_factory: AdapterFactory,
     repository: JobStateRepository,
@@ -131,14 +138,14 @@ async def run_persisted_run(
 
 async def _run_monitor(
     search_configuration: SearchConfiguration,
-    company_allowlist: CompanyAllowlist,
+    company_allowlist: MonitoringSources,
     *,
     adapter_factory: AdapterFactory,
     repository: JobStateRepository | None,
     persist: bool,
 ) -> MonitoringRunResult:
     adapters = tuple(
-        adapter_factory(company) for company in company_allowlist.companies if company.enabled
+        adapter_factory(company) for company in _configured_companies(company_allowlist)
     )
     fetched_results = await run_adapters(adapters)
     source_results = _classify_snapshot_authority(fetched_results, repository)
@@ -270,7 +277,7 @@ def _observe_successful_source(
 
 async def run_configured_dry_run(
     search_configuration: SearchConfiguration,
-    company_allowlist: CompanyAllowlist,
+    company_allowlist: MonitoringSources,
     *,
     repository: JobStateRepository | None = None,
 ) -> MonitoringRunResult:
@@ -282,7 +289,7 @@ async def run_configured_dry_run(
 
 async def run_configured_monitoring_run(
     search_configuration: SearchConfiguration,
-    company_allowlist: CompanyAllowlist,
+    company_allowlist: MonitoringSources,
     *,
     repository: JobStateRepository,
 ) -> MonitoringRunResult:
@@ -294,19 +301,11 @@ async def run_configured_monitoring_run(
 
 async def _run_configured(
     search_configuration: SearchConfiguration,
-    company_allowlist: CompanyAllowlist,
+    company_allowlist: MonitoringSources,
     *,
     repository: JobStateRepository | None,
     persist: bool,
 ) -> MonitoringRunResult:
-    if not any(company.enabled for company in company_allowlist.companies):
-        return await _run_with_factory(
-            search_configuration,
-            company_allowlist,
-            adapter_factory=_UnsupportedSourceAdapter,
-            repository=repository,
-            persist=persist,
-        )
     async with httpx.AsyncClient(timeout=20.0) as client:
         return await _run_with_factory(
             search_configuration,
@@ -319,7 +318,7 @@ async def _run_configured(
 
 async def _run_with_factory(
     search_configuration: SearchConfiguration,
-    company_allowlist: CompanyAllowlist,
+    company_allowlist: MonitoringSources,
     *,
     adapter_factory: AdapterFactory,
     repository: JobStateRepository | None,
@@ -348,4 +347,17 @@ def _adapter_for_company(company: CompanyConfig, client: httpx.AsyncClient) -> S
         return GreenhouseAdapter(company, client)
     if source_type == "lever":
         return LeverAdapter(company, client)
+    if source_type == "ashby":
+        return AshbyAdapter(company, client)
     return _UnsupportedSourceAdapter(company)
+
+
+def configured_source_count(sources: MonitoringSources) -> int:
+    """Return the actual safe source set, independent of user assessment preferences."""
+    return len(_configured_companies(sources))
+
+
+def _configured_companies(sources: MonitoringSources) -> tuple[CompanyConfig, ...]:
+    if isinstance(sources, SourceCatalog):
+        return sources.monitored_companies()
+    return tuple(company for company in sources.companies if company.enabled)

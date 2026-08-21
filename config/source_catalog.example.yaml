@@ -1,0 +1,23 @@
+# Shared catalog facts only: no user degree, role, geography, language, or visa preferences.
+# Candidate records never enter normal monitoring, even if enabled.
+version: 1
+sources:
+  - source_id: example-greenhouse
+    canonical_employer_name: Example Company
+    provider: greenhouse
+    provider_board_id: example-company
+    careers_url: https://boards.greenhouse.io/example-company
+    enabled: false
+    discovery_provenance: manual
+    verification_status: candidate
+    country_hints: [United Kingdom]
+    metadata_version: 1
+  - source_id: example-ashby
+    canonical_employer_name: Example Ashby Employer
+    provider: ashby
+    provider_board_id: example-ashby-employer
+    careers_url: https://jobs.ashbyhq.com/example-ashby-employer
+    enabled: false
+    discovery_provenance: manual
+    verification_status: candidate
+    metadata_version: 1

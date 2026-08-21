@@ -13,6 +13,7 @@ from internship_monitor.config import (
     load_company_allowlist,
     load_notification_configuration,
     load_search_configuration,
+    load_source_catalog,
 )
 
 
@@ -46,6 +47,7 @@ def operational_preflight(
     notification_state_path: Path,
     notifications_path: Path | None = None,
     delivery_readiness: bool = False,
+    catalog_path: Path | None = None,
 ) -> PreflightReport:
     """Validate local operation readiness without discovery, state mutation, or delivery."""
     checks: list[PreflightCheck] = []
@@ -66,42 +68,62 @@ def operational_preflight(
         checks.append(
             PreflightCheck("profile", PreflightLevel.PASS, f"profile valid; {intelligence_detail}")
         )
-    try:
-        allowlist = load_company_allowlist(companies_path)
-    except ConfigurationError:
-        checks.append(
-            PreflightCheck(
-                "companies", PreflightLevel.FAIL, "company allowlist could not be loaded safely"
-            )
-        )
-        allowlist = None
-    else:
-        assert allowlist is not None
-        identities: set[tuple[str, str]] = set()
-        problem: str | None = None
-        for company in allowlist.companies:
-            source_type = company.source.type.casefold()
-            if source_type not in {"greenhouse", "lever"}:
-                problem = "allowlist contains an unsupported adapter type"
-                break
-            if company.enabled and company.source.board_token is None:
-                problem = "enabled source is missing its required board token"
-                break
-            identity = (source_type, (company.source.board_token or "").casefold())
-            if company.enabled and identity in identities:
-                problem = "allowlist contains duplicate enabled source identities"
-                break
-            identities.add(identity)
-        if problem is None:
+    if catalog_path is not None:
+        try:
+            catalog = load_source_catalog(catalog_path)
+        except ConfigurationError:
             checks.append(
                 PreflightCheck(
-                    "companies",
-                    PreflightLevel.PASS,
-                    f"allowlist valid; {sum(company.enabled for company in allowlist.companies)} enabled sources",  # noqa: E501
+                    "catalog", PreflightLevel.FAIL, "source catalog could not be loaded safely"
                 )
             )
         else:
-            checks.append(PreflightCheck("companies", PreflightLevel.FAIL, problem))
+            monitored = catalog.monitored_companies()
+            checks.append(
+                PreflightCheck(
+                    "catalog",
+                    PreflightLevel.PASS,
+                    f"catalog valid; {len(monitored)} verified enabled sources",
+                )
+            )
+    else:
+        try:
+            allowlist = load_company_allowlist(companies_path)
+        except ConfigurationError:
+            checks.append(
+                PreflightCheck(
+                    "companies", PreflightLevel.FAIL, "company allowlist could not be loaded safely"
+                )
+            )
+            allowlist = None
+        else:
+            assert allowlist is not None
+            identities: set[tuple[str, str]] = set()
+            problem: str | None = None
+            for company in allowlist.companies:
+                source_type = company.source.type.casefold()
+                if source_type not in {"greenhouse", "lever", "ashby"}:
+                    problem = "allowlist contains an unsupported adapter type"
+                    break
+                if company.enabled and company.source.board_token is None:
+                    problem = "enabled source is missing its required board token"
+                    break
+                identity = (source_type, (company.source.board_token or "").casefold())
+                if company.enabled and identity in identities:
+                    problem = "allowlist contains duplicate enabled source identities"
+                    break
+                identities.add(identity)
+            if problem is None:
+                enabled_count = sum(company.enabled for company in allowlist.companies)
+                checks.append(
+                    PreflightCheck(
+                        "companies",
+                        PreflightLevel.PASS,
+                        f"allowlist valid; {enabled_count} enabled sources",
+                    )
+                )
+            else:
+                checks.append(PreflightCheck("companies", PreflightLevel.FAIL, problem))
     checks.extend(_state_checks(state_path, notification_state_path))
     if delivery_readiness:
         checks.append(_delivery_check(notifications_path))

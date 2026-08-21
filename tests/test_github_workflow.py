@@ -20,6 +20,8 @@ class GitHubWorkflowTests(TestCase):
         self.assertIn("retention-days: 90", text)
         self.assertIn("INTERNSHIP_MONITOR_PROFILE_YAML", text)
         self.assertIn("INTERNSHIP_MONITOR_COMPANIES_YAML", text)
+        self.assertIn("INTERNSHIP_MONITOR_SOURCE_CATALOG_YAML", text)
+        self.assertIn("--catalog config.local/source_catalog.yaml", text)
         self.assertIn("initialize_state", text)
         self.assertIn("state_bundle validate", text)
         self.assertIn("state_bundle create", text)

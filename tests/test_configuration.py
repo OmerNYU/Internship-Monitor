@@ -6,6 +6,7 @@ from internship_monitor.config import (
     ConfigurationError,
     load_company_allowlist,
     load_search_configuration,
+    load_source_catalog,
 )
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -33,6 +34,13 @@ class ConfigurationLoadingTests(TestCase):
         self.assertEqual(allowlist.companies[0].name, "Example Company")
         self.assertFalse(allowlist.companies[0].enabled)
         self.assertEqual(allowlist.companies[0].target_regions, ("EMEA", "APAC"))
+
+    def test_loads_catalog_example_without_monitoring_unverified_sources(self) -> None:
+        catalog = load_source_catalog(PROJECT_ROOT / "config/source_catalog.example.yaml")
+
+        self.assertEqual(catalog.version, 1)
+        self.assertEqual(len(catalog.sources), 2)
+        self.assertEqual(catalog.monitored_companies(), ())
 
     def test_rejects_unknown_fields_with_a_safe_path_based_error(self) -> None:
         invalid = """

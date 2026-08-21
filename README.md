@@ -44,14 +44,22 @@ credentials, and operational state in ignored locations such as `config.local/`,
 `state/`. Never commit contact details, work-authorisation records, provider credentials, or
 alert history.
 
-Company sources remain explicit allowlist entries. Use `type: greenhouse` with its public board
-token, or `type: lever` with the public Lever site slug from `jobs.lever.co/<site>`; both use the
-existing `board_token` field. Lever data is normalized at the adapter boundary before it reaches
-any analysis or notification code.
+Source monitoring is role/eligibility first: a shared, reviewed catalog defines safe structured
+sources, and the private profile evaluates the resulting listings. Legacy company allowlists remain
+fully supported during migration. Supported structured providers are Greenhouse, Lever, and Ashby;
+candidate, unhealthy, disabled, and retired catalog records never enter normal monitoring.
+See [`docs/source_catalog_v0.1.md`](docs/source_catalog_v0.1.md) for the catalog lifecycle,
+migration, provider roadmap, and source-discovery boundary.
 
 The normal monitor path only discovers, assesses, persists, and optionally queues alerts:
 
 ```bash
+uv run internship-monitor run \
+  --profile config.local/profile.yaml \
+  --catalog config.local/source_catalog.yaml \
+  --queue-notifications
+
+# Or retain the legacy private company file during migration:
 uv run internship-monitor run \
   --profile config.local/profile.yaml \
   --companies config.local/companies.yaml \
@@ -75,7 +83,8 @@ Before enabling the workflow, set these multiline GitHub Actions secrets from yo
 files:
 
 - `INTERNSHIP_MONITOR_PROFILE_YAML`
-- `INTERNSHIP_MONITOR_COMPANIES_YAML`
+- `INTERNSHIP_MONITOR_COMPANIES_YAML` (legacy; retained for migration)
+- `INTERNSHIP_MONITOR_SOURCE_CATALOG_YAML` (optional replacement; takes precedence)
 
 Operational state is a private, unencrypted GitHub Actions artifact named
 `internship-monitor-state`, retained for 90 days. It contains `state/jobs.sqlite3`,
@@ -127,8 +136,8 @@ uv run internship-monitor preflight \
   --companies config.local/companies.yaml
 ```
 
-`preflight` validates profile/allowlist structure, supported adapters, duplicate enabled source
-identities, and writable state parents. It does not fetch job boards, initialize durable databases,
+`preflight` validates profile plus either catalog or legacy allowlist structure, supported adapters,
+duplicate source identities, and writable state parents. It does not fetch job boards, initialize durable databases,
 contact Ollama, or send notifications. Add `--delivery-readiness --notifications
 config.local/notifications.yaml` only to validate notifier configuration structurally; it still
 never sends a message.
