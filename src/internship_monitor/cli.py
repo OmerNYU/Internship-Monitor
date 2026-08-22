@@ -15,6 +15,7 @@ from typing import Any
 from internship_monitor import __version__
 from internship_monitor.adapters import SourceRunFailure
 from internship_monitor.analysis import AssessmentProvider, DeterministicAssessor
+from internship_monitor.catalog import CatalogVerificationReport, verify_catalog
 from internship_monitor.config import (
     NotificationConfiguration,
     SearchConfiguration,
@@ -139,6 +140,17 @@ def build_parser() -> argparse.ArgumentParser:
         dest="delivery_readiness",
         help="Alias for --delivery-readiness; never authenticates or sends.",
     )
+    catalog_verify_parser = subparsers.add_parser(
+        "catalog-verify",
+        help="Probe structured catalog boards without state, AI, or notification side effects.",
+    )
+    catalog_verify_parser.add_argument("--catalog", type=Path, required=True)
+    catalog_verify_parser.add_argument(
+        "--report", type=Path, help="Optional JSON verification report; contains no descriptions."
+    )
+    catalog_verify_parser.add_argument("--json", action="store_true", dest="json_output")
+    catalog_verify_parser.add_argument("--concurrency", type=int, default=16)
+    catalog_verify_parser.add_argument("--provider-concurrency", type=int, default=6)
     review_parser = subparsers.add_parser(
         "intelligence-review-candidates",
         help="Read persisted shadow candidates for explicit human review.",
@@ -455,6 +467,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(_status_summary(system_status(args.state, args.notification_state)))
         return 0
 
+    if args.command == "catalog-verify":
+        return _catalog_verify_command(args, parser)
+
     if args.command == "preflight":
         report = operational_preflight(
             args.profile,
@@ -512,6 +527,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         search_configuration,
                         company_allowlist,
                         repository=repository,
+                        progress=lambda message: print(message, file=sys.stderr),
                     )
                 )
             if args.export_listings:
@@ -551,6 +567,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     search_configuration,
                     company_allowlist,
                     repository=repository,
+                    progress=lambda message: print(message, file=sys.stderr),
                 )
             )
             if args.shadow_intelligence:
@@ -967,7 +984,14 @@ def _run_summary(result: MonitoringRunResult, *, dry_run: bool) -> str:
         f"{result.source_degraded_count} degraded, {result.source_failure_count} failures; "
         f"geographic routing: {geographic_routing or 'none'}; "
         f"source issues: {_source_issue_summary(result) or 'none'}; "
-        f"state changes: {changes or 'none'}. {state_note} and no notifications were sent."
+        f"state changes: {changes or 'none'}; "
+        f"assessment cache: computed={result.assessment_cache.computed}, "
+        f"reused={result.assessment_cache.reused}; "
+        f"timings: fetch={result.phase_timings.source_fetch_seconds:.1f}s, "
+        f"assessment={result.phase_timings.deterministic_assessment_seconds:.1f}s, "
+        f"alerts={result.phase_timings.alert_decision_seconds:.1f}s, "
+        f"total={result.phase_timings.total_seconds:.1f}s. "
+        f"{state_note} and no notifications were sent."
     )
 
 
@@ -1396,3 +1420,46 @@ def _review_candidates_command(args: argparse.Namespace, parser: argparse.Argume
                 f"- {item['company']} | {item['title']} | {item['deterministic_role_level']} -> {item['proposed_role_level'] or 'no proposal'} | {item['shadow_status']}"  # noqa: E501
             )
     return 0
+
+
+def _catalog_verify_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    if not 1 <= args.concurrency <= 16:
+        parser.error("--concurrency must be between 1 and 16")
+    if not 1 <= args.provider_concurrency <= 16:
+        parser.error("--provider-concurrency must be between 1 and 16")
+    catalog = load_source_catalog(args.catalog)
+    report = asyncio.run(
+        verify_catalog(
+            catalog,
+            concurrency_limit=args.concurrency,
+            provider_concurrency_limit=args.provider_concurrency,
+        )
+    )
+    payload = report.as_dict()
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    if args.json_output:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(_catalog_verification_summary(report))
+    return 0 if all(result.verification_status == "verified" for result in report.results) else 1
+
+
+def _catalog_verification_summary(report: CatalogVerificationReport) -> str:
+    lines = [
+        f"Catalog verification: {len(report.results)} source probes; no state or delivery used."
+    ]
+    for result in report.results:
+        detail = (
+            f"{result.listing_count} listings, {result.internship_signal_count} internship signals"
+            if result.verification_status == "verified"
+            else f"failure={result.failure_category}"
+        )
+        lines.append(
+            f"- {result.employer} ({result.provider}:{result.board_id}): "
+            f"{result.verification_status}; {detail}."
+        )
+    return "\n".join(lines)

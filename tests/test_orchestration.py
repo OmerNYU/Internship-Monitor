@@ -258,3 +258,75 @@ class MonitoringCompositionTests(TestCase):
         self.assertEqual(result.source_degraded_count, 0)
         self.assertEqual(health[0].status.value, "healthy")
         self.assertTrue(health[0].authoritative)
+
+    def test_persisted_assessment_cache_reuses_identical_listing(self) -> None:
+        configured_company = company("Working Company")
+        allowlist = CompanyAllowlist(companies=(configured_company,))
+
+        def adapter_factory(company_config: CompanyConfig) -> SourceAdapter:
+            return SuccessfulAdapter(company_config, (listing(),))
+
+        with (
+            TemporaryDirectory() as directory,
+            JobStateRepository(Path(directory) / "jobs.sqlite3") as repository,
+        ):
+            first = asyncio.run(
+                run_persisted_run(
+                    self.configuration,
+                    allowlist,
+                    adapter_factory=adapter_factory,
+                    repository=repository,
+                )
+            )
+            second = asyncio.run(
+                run_persisted_run(
+                    self.configuration,
+                    allowlist,
+                    adapter_factory=adapter_factory,
+                    repository=repository,
+                )
+            )
+
+        self.assertEqual(first.assessment_cache.computed, 1)
+        self.assertEqual(first.assessment_cache.reused, 0)
+        self.assertEqual(second.assessment_cache.computed, 0)
+        self.assertEqual(second.assessment_cache.reused, 1)
+        self.assertEqual(second.assessments[0], first.assessments[0])
+
+    def test_changed_description_invalidates_persisted_assessment_cache(self) -> None:
+        configured_company = company("Working Company")
+        allowlist = CompanyAllowlist(companies=(configured_company,))
+        phase = {"value": "first"}
+
+        def adapter_factory(company_config: CompanyConfig) -> SourceAdapter:
+            description = (
+                None
+                if phase["value"] == "first"
+                else "Students graduating 2027-2029. Changed Python APIs."
+            )
+            return SuccessfulAdapter(company_config, (listing(description=description),))
+
+        with (
+            TemporaryDirectory() as directory,
+            JobStateRepository(Path(directory) / "jobs.sqlite3") as repository,
+        ):
+            asyncio.run(
+                run_persisted_run(
+                    self.configuration,
+                    allowlist,
+                    adapter_factory=adapter_factory,
+                    repository=repository,
+                )
+            )
+            phase["value"] = "second"
+            second = asyncio.run(
+                run_persisted_run(
+                    self.configuration,
+                    allowlist,
+                    adapter_factory=adapter_factory,
+                    repository=repository,
+                )
+            )
+
+        self.assertEqual(second.assessment_cache.computed, 1)
+        self.assertEqual(second.assessment_cache.reused, 0)

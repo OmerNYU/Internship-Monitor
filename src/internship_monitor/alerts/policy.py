@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -12,6 +14,7 @@ from internship_monitor.alerts.models import (
     OpportunityState,
 )
 from internship_monitor.analysis import HardBlockerKind, JobAssessment, Recommendation
+from internship_monitor.analysis.cache import ListingIdentity, listing_identity
 from internship_monitor.opportunities import OpportunityGroup
 from internship_monitor.state import ListingChange, ListingObservation
 
@@ -19,6 +22,44 @@ PAKISTAN_TIME = ZoneInfo("Asia/Karachi")
 _MORNING_START = time(8, tzinfo=PAKISTAN_TIME)
 _DIGEST_TIME = time(11, tzinfo=PAKISTAN_TIME)
 _FRESH_CHANGES = {ListingChange.NEW, ListingChange.REPOSTED, ListingChange.REAPPEARED}
+
+
+@dataclass(frozen=True, slots=True)
+class AlertIndexes:
+    """One-run O(1) joins for alert decisions, keyed by durable listing identity."""
+
+    assessments: Mapping[ListingIdentity, JobAssessment]
+    observations: Mapping[ListingIdentity, ListingObservation]
+
+    @classmethod
+    def build(
+        cls,
+        assessments: tuple[JobAssessment, ...],
+        observations: tuple[ListingObservation, ...],
+    ) -> AlertIndexes:
+        return cls(
+            assessments={listing_identity(item.job): item for item in assessments},
+            observations={listing_identity(item.listing): item for item in observations},
+        )
+
+    def best_assessment(self, opportunity: OpportunityGroup) -> JobAssessment:
+        members = tuple(
+            self.assessments[listing_identity(listing)] for listing in opportunity.listings
+        )
+        if not members:
+            raise ValueError("opportunity group has no matching job assessment")
+        canonical = self.assessments.get(listing_identity(opportunity.canonical_listing))
+        return max((canonical,) if canonical is not None else members, key=lambda item: item.score)
+
+    def observations_for(self, opportunity: OpportunityGroup) -> tuple[ListingObservation, ...]:
+        matched = tuple(
+            self.observations[listing_identity(listing)]
+            for listing in opportunity.listings
+            if listing_identity(listing) in self.observations
+        )
+        if not matched:
+            raise ValueError("opportunity group has no matching listing observation")
+        return matched
 
 
 class AlertPolicy:
@@ -31,11 +72,13 @@ class AlertPolicy:
         observations: tuple[ListingObservation, ...],
         *,
         now: datetime,
+        indexes: AlertIndexes | None = None,
     ) -> AlertDecision:
         """Return one decision without sending, queueing, or persisting anything."""
         _require_aware(now)
-        group_observations = _observations_for_opportunity(opportunity, observations)
-        assessment = _best_assessment(opportunity, assessments)
+        active_indexes = indexes or AlertIndexes.build(assessments, observations)
+        group_observations = active_indexes.observations_for(opportunity)
+        assessment = active_indexes.best_assessment(opportunity)
         opportunity_state = _opportunity_state(group_observations)
         suppressing_blockers = tuple(
             blocker

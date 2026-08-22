@@ -1,6 +1,7 @@
 import hashlib
 import json
 import shutil
+import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -85,3 +86,23 @@ class StateBundleTests(TestCase):
 
             with self.assertRaisesRegex(StateBundleError, "not valid SQLite"):
                 validate_state_bundle(state)
+
+    def test_actions_artifact_root_layout_restores_into_state_directory(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = self._create_state(root)
+            archive = root / "internship-monitor-state.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                for name in ("manifest.json", "jobs.sqlite3", "notifications.sqlite3"):
+                    bundle.write(state / name, arcname=name)
+
+            restored_state = root / "actions-workspace" / "state"
+            restored_state.mkdir(parents=True)
+            with zipfile.ZipFile(archive) as bundle:
+                bundle.extractall(restored_state)
+
+            validate_state_bundle(restored_state)
+            workspace = restored_state.parent
+            self.assertFalse((workspace / "manifest.json").exists())
+            self.assertFalse((workspace / "jobs.sqlite3").exists())
+            self.assertFalse((workspace / "notifications.sqlite3").exists())

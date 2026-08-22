@@ -61,7 +61,19 @@ jobs:
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
             --output /tmp/internship-monitor-state.zip
-          unzip -q /tmp/internship-monitor-state.zip -d .
+          for name in manifest.json jobs.sqlite3 notifications.sqlite3; do
+            if [ -e "${name}" ]; then
+              echo "Unexpected root-level state file before restore: ${name}" >&2
+              exit 1
+            fi
+          done
+          unzip -q /tmp/internship-monitor-state.zip -d state
+          for name in manifest.json jobs.sqlite3 notifications.sqlite3; do
+            if [ -e "${name}" ]; then
+              echo "State artifact restored outside state/: ${name}" >&2
+              exit 1
+            fi
+          done
           python -m internship_monitor.deployment.state_bundle validate --state-dir state
 
       - name: Materialize private monitor configuration
@@ -111,7 +123,20 @@ jobs:
             --notification-state state/notifications.sqlite3 | tee -a "${GITHUB_STEP_SUMMARY}"
 
       - name: Create state manifest
-        run: python -m internship_monitor.deployment.state_bundle create --state-dir state
+        run: |
+          unexpected="$(find state -mindepth 1 -maxdepth 1 \
+            ! -name jobs.sqlite3 ! -name notifications.sqlite3 -print -quit)"
+          if [ -n "${unexpected}" ]; then
+            echo "Unexpected state file would enter the authoritative artifact: ${unexpected}" >&2
+            exit 1
+          fi
+          python -m internship_monitor.deployment.state_bundle create --state-dir state
+          unexpected="$(find state -mindepth 1 -maxdepth 1 \
+            ! -name jobs.sqlite3 ! -name notifications.sqlite3 ! -name manifest.json -print -quit)"
+          if [ -n "${unexpected}" ]; then
+            echo "Unexpected state file would enter the authoritative artifact: ${unexpected}" >&2
+            exit 1
+          fi
 
       - name: Upload authoritative state
         if: success()

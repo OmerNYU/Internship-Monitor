@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from internship_monitor.analysis.cache import ListingIdentity, listing_identity
 from internship_monitor.models import JobListing
 from internship_monitor.reporting.models import ListingStateCounts, MonitorRunSummary
 from internship_monitor.state.models import (
@@ -24,6 +25,7 @@ from internship_monitor.state.models import (
 
 _SOURCE_HEALTH_RETENTION = 300
 _RECENT_ISSUE_WINDOW = 20
+_ASSESSMENT_CACHE_RETENTION_DAYS = 180
 
 
 def _utc_now() -> datetime:
@@ -47,6 +49,73 @@ class JobStateRepository:
             self._connection = sqlite3.connect(state_path)
             self._connection.row_factory = sqlite3.Row
             self._create_schema()
+
+    def deterministic_assessment_payloads(
+        self,
+        listings: Sequence[JobListing],
+        *,
+        profile_fingerprint: str,
+        contract_version: str,
+    ) -> dict[ListingIdentity, str]:
+        """Load matching safe cache entries; unavailable/corrupt storage simply misses."""
+        wanted = {listing_identity(listing): _fingerprint(listing) for listing in listings}
+        try:
+            rows = self._connection.execute(
+                """SELECT source, company, source_job_id, listing_fingerprint, assessment_json
+                FROM deterministic_assessment_cache
+                WHERE profile_fingerprint = ? AND contract_version = ?""",
+                (profile_fingerprint, contract_version),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return {}
+        return {
+            (str(row["source"]), str(row["company"]), str(row["source_job_id"])): str(
+                row["assessment_json"]
+            )
+            for row in rows
+            if wanted.get((str(row["source"]), str(row["company"]), str(row["source_job_id"])))
+            == row["listing_fingerprint"]
+        }
+
+    def record_deterministic_assessment_payloads(
+        self,
+        payloads: Sequence[tuple[JobListing, str, str, str, str]],
+    ) -> None:
+        """Persist a batch of deterministic outputs without copying canonical listings."""
+        if self._read_only:
+            raise RuntimeError("cannot record assessment cache through a read-only repository")
+        if not payloads:
+            return
+        cached_at = _timestamp_text(_utc_now())
+        assert cached_at is not None
+        with self._connection:
+            self._connection.executemany(
+                """INSERT INTO deterministic_assessment_cache (
+                source, company, source_job_id, listing_fingerprint, profile_fingerprint,
+                contract_version, assessment_json, cached_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source, company, source_job_id, listing_fingerprint,
+                profile_fingerprint, contract_version) DO UPDATE SET
+                assessment_json = excluded.assessment_json, cached_at = excluded.cached_at""",
+                (
+                    (
+                        listing.source,
+                        listing.company,
+                        listing.source_job_id,
+                        listing_fingerprint,
+                        profile_fingerprint,
+                        contract_version,
+                        assessment_json,
+                        cached_at,
+                    )
+                    for listing, listing_fingerprint, profile_fingerprint, contract_version, assessment_json in payloads
+                ),
+            )
+            cutoff = _timestamp_text(_utc_now() - timedelta(days=_ASSESSMENT_CACHE_RETENTION_DAYS))
+            assert cutoff is not None
+            self._connection.execute(
+                "DELETE FROM deterministic_assessment_cache WHERE cached_at < ?", (cutoff,)
+            )
 
     def close(self) -> None:
         self._connection.close()
@@ -464,6 +533,24 @@ class JobStateRepository:
                 PRIMARY KEY (source, company, source_job_id)
             )
             """
+        )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS deterministic_assessment_cache (
+                source TEXT NOT NULL, company TEXT NOT NULL, source_job_id TEXT NOT NULL,
+                listing_fingerprint TEXT NOT NULL, profile_fingerprint TEXT NOT NULL,
+                contract_version TEXT NOT NULL, assessment_json TEXT NOT NULL,
+                cached_at TEXT NOT NULL,
+                PRIMARY KEY (
+                    source, company, source_job_id, listing_fingerprint,
+                    profile_fingerprint, contract_version
+                )
+            )
+            """
+        )
+        self._connection.execute(
+            """CREATE INDEX IF NOT EXISTS deterministic_assessment_cache_lookup
+            ON deterministic_assessment_cache (profile_fingerprint, contract_version)"""
         )
         self._connection.execute(
             """

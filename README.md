@@ -48,15 +48,16 @@ Source monitoring is role/eligibility first: a shared, reviewed catalog defines 
 sources, and the private profile evaluates the resulting listings. Legacy company allowlists remain
 fully supported during migration. Supported structured providers are Greenhouse, Lever, and Ashby;
 candidate, unhealthy, disabled, and retired catalog records never enter normal monitoring.
-See [`docs/source_catalog_v0.1.md`](docs/source_catalog_v0.1.md) for the catalog lifecycle,
-migration, provider roadmap, and source-discovery boundary.
+See [`docs/source_catalog_v0.1.md`](docs/source_catalog_v0.1.md) and
+[`docs/catalog_expansion_29_1.md`](docs/catalog_expansion_29_1.md) for the catalog lifecycle,
+shared-catalog decision, verification workflow, expansion results, and source-discovery boundary.
 
 The normal monitor path only discovers, assesses, persists, and optionally queues alerts:
 
 ```bash
 uv run internship-monitor run \
   --profile config.local/profile.yaml \
-  --catalog config.local/source_catalog.yaml \
+  --catalog config/source_catalog.yaml \
   --queue-notifications
 
 # Or retain the legacy private company file during migration:

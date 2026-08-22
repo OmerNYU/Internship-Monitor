@@ -42,6 +42,16 @@ class ConfigurationLoadingTests(TestCase):
         self.assertEqual(len(catalog.sources), 2)
         self.assertEqual(catalog.monitored_companies(), ())
 
+    def test_shared_catalog_preserves_the_expanded_verified_source_set(self) -> None:
+        catalog = load_source_catalog(PROJECT_ROOT / "config/source_catalog.yaml")
+
+        self.assertEqual(len(catalog.sources), 175)
+        self.assertEqual(len(catalog.monitored_companies()), 131)
+        self.assertEqual(
+            {source.provider.value for source in catalog.sources},
+            {"greenhouse", "lever", "ashby"},
+        )
+
     def test_rejects_unknown_fields_with_a_safe_path_based_error(self) -> None:
         invalid = """
 profile:

@@ -1,0 +1,37 @@
+{
+  "authoritative": 129,
+  "catalog_path": "config/source_catalog.yaml",
+  "degraded": 0,
+  "duration_seconds": 27.522,
+  "failed": 2,
+  "global_concurrency_limit": 16,
+  "internship_language_candidates": 755,
+  "proof_mode": "read_only_ingestion_and_internship_subset_assessment",
+  "provider_concurrency_limit": 6,
+  "providers": {
+    "ashby": {
+      "authoritative": 56,
+      "degraded": 0,
+      "failed": 0,
+      "listings": 4487,
+      "source_runs": 56
+    },
+    "greenhouse": {
+      "authoritative": 63,
+      "degraded": 0,
+      "failed": 0,
+      "listings": 12444,
+      "source_runs": 63
+    },
+    "lever": {
+      "authoritative": 10,
+      "degraded": 0,
+      "failed": 2,
+      "listings": 508,
+      "source_runs": 12
+    }
+  },
+  "role_relevant_internship_candidates": 121,
+  "source_runs": 131,
+  "total_listings": 17439
+}

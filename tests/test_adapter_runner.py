@@ -117,3 +117,33 @@ class RetryTests(TestCase):
         assert isinstance(result, SourceRunSuccess)
         self.assertEqual(adapter.calls, 3)
         self.assertEqual(result.attempt_count, 3)
+
+
+class ProviderConcurrencyTests(TestCase):
+    def test_provider_host_bound_is_enforced_within_global_bound(self) -> None:
+        tracker = {"active": 0, "maximum": 0, "greenhouse": 0, "greenhouse_maximum": 0}
+
+        class SlowAdapter:
+            def __init__(self, configured_company: CompanyConfig) -> None:
+                self.company = configured_company
+
+            async def fetch(self) -> tuple[JobListing, ...]:
+                tracker["active"] += 1
+                tracker["maximum"] = max(tracker["maximum"], tracker["active"])
+                tracker["greenhouse"] += 1
+                tracker["greenhouse_maximum"] = max(
+                    tracker["greenhouse_maximum"], tracker["greenhouse"]
+                )
+                await asyncio.sleep(0.001)
+                tracker["greenhouse"] -= 1
+                tracker["active"] -= 1
+                return ()
+
+        adapters = tuple(SlowAdapter(company(f"Provider {index}")) for index in range(20))
+        results = asyncio.run(
+            run_adapters(adapters, concurrency_limit=8, provider_concurrency_limit=3)
+        )
+
+        self.assertEqual(len(results), 20)
+        self.assertLessEqual(tracker["maximum"], 8)
+        self.assertLessEqual(tracker["greenhouse_maximum"], 3)

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -25,21 +27,52 @@ class OpportunityGrouper:
     def group(self, listings: tuple[JobListing, ...]) -> tuple[OpportunityGroup, ...]:
         """Return groups in first-seen order while retaining listing order within each group."""
         groups: list[_MutableGroup] = []
+        candidates_by_key: dict[tuple[str, str, tuple[str, str]], list[_MutableGroup]] = (
+            defaultdict(list)
+        )
+        eligible_by_key_source: dict[
+            tuple[tuple[str, str, tuple[str, str]], str], list[_MutableGroup]
+        ] = {}
         for listing in listings:
-            matched_group = self._matching_group(listing, groups)
+            key = _match_key(listing)
+            if key is None:
+                cache_key = None
+                candidates: Iterable[_MutableGroup] = ()
+            else:
+                cache_key = (key, listing.source)
+                candidates = eligible_by_key_source.setdefault(
+                    cache_key,
+                    [
+                        group
+                        for group in candidates_by_key[key]
+                        if not any(existing.source == listing.source for existing in group.listings)
+                    ],
+                )
+            matched_group = self._matching_group(listing, candidates)
             if matched_group is None:
-                groups.append(_MutableGroup(listings=[listing], reasons=[]))
+                group = _MutableGroup(listings=[listing], reasons=[])
+                groups.append(group)
+                if key is not None:
+                    candidates_by_key[key].append(group)
+                    for (
+                        cached_key,
+                        cached_source,
+                    ), cached_groups in eligible_by_key_source.items():
+                        if cached_key == key and cached_source != listing.source:
+                            cached_groups.append(group)
                 continue
             group, reasons = matched_group
             group.listings.append(listing)
             group.reasons.extend(reason for reason in reasons if reason not in group.reasons)
+            if cache_key is not None:
+                eligible_by_key_source[cache_key].remove(group)
 
         return tuple(_freeze_group(group) for group in groups)
 
     def _matching_group(
         self,
         listing: JobListing,
-        groups: list[_MutableGroup],
+        groups: Iterable[_MutableGroup],
     ) -> tuple[_MutableGroup, tuple[str, ...]] | None:
         for group in groups:
             if any(existing.source == listing.source for existing in group.listings):
@@ -49,6 +82,13 @@ class OpportunityGrouper:
             if reasons is not None:
                 return group, reasons
         return None
+
+
+def _match_key(listing: JobListing) -> tuple[str, str, tuple[str, str]] | None:
+    location = _location_key(listing)
+    if location is None:
+        return None
+    return _normalize(listing.company), _normalize_title(listing.title), location
 
 
 def _match_reasons(left: JobListing, right: JobListing) -> tuple[str, ...] | None:

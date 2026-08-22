@@ -6,11 +6,12 @@ from internship_monitor.alerts.models import (
     AlertUrgency,
     OpportunityState,
 )
-from internship_monitor.alerts.policy import AlertPolicy
+from internship_monitor.alerts.policy import AlertIndexes, AlertPolicy
 
 __all__ = [
     "AlertAction",
     "AlertDecision",
+    "AlertIndexes",
     "AlertPolicy",
     "AlertUrgency",
     "OpportunityState",

@@ -1,12 +1,14 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase
 from zoneinfo import ZoneInfo
 
 from internship_monitor.alerts import (
     AlertAction,
     AlertDecision,
+    AlertIndexes,
     AlertPolicy,
     AlertUrgency,
     OpportunityState,
@@ -192,3 +194,48 @@ class AlertPolicyTests(TestCase):
 
         self.assertEqual(decision.action, AlertAction.SUPPRESS)
         self.assertIn("outside configured role relevance", decision.reasons[0])
+
+    def test_indexed_lookup_preserves_policy_result(self) -> None:
+        first = self.assess(job())
+        second_job = job().model_copy(update={"source_job_id": "456", "title": "Data Intern"})
+        second = self.assess(second_job)
+        opportunity = OpportunityGroup(
+            canonical_listing=second.job,
+            listings=(first.job, second.job),
+            match_confidence=MatchConfidence.HIGH,
+            reasons=("Test opportunity.",),
+        )
+        observations = (
+            ListingObservation(listing=first.job, change=ListingChange.UNCHANGED),
+            ListingObservation(listing=second.job, change=ListingChange.NEW),
+        )
+        now = datetime(2026, 8, 12, 9, tzinfo=PKT)
+
+        legacy = self.policy.decide(opportunity, (first, second), observations, now=now)
+        indexed = self.policy.decide(
+            opportunity,
+            (first, second),
+            observations,
+            now=now,
+            indexes=AlertIndexes.build((first, second), observations),
+        )
+
+        self.assertEqual(indexed, legacy)
+        self.assertEqual(indexed.assessment, second)
+        self.assertEqual(indexed.observations, observations)
+
+    def test_index_build_handles_ten_thousand_listing_keys(self) -> None:
+        base = job()
+        listings = tuple(
+            base.model_copy(update={"source_job_id": str(index)}) for index in range(10_000)
+        )
+        assessments = tuple(SimpleNamespace(job=listing) for listing in listings)
+        observations = tuple(
+            ListingObservation(listing=listing, change=ListingChange.UNCHANGED)
+            for listing in listings
+        )
+
+        indexes = AlertIndexes.build(assessments, observations)
+
+        self.assertEqual(len(indexes.assessments), 10_000)
+        self.assertEqual(len(indexes.observations), 10_000)

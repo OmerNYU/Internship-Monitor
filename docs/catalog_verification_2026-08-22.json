@@ -1,0 +1,2731 @@
+{
+  "catalog_version": 1,
+  "report": {
+    "results": [
+      {
+        "board_id": "palantir",
+        "duration_ms": 5674,
+        "employer": "Palantir",
+        "failure_category": null,
+        "internship_signal_count": 40,
+        "listing_count": 308,
+        "location_examples": [
+          "London, United Kingdom",
+          "Palo Alto, CA",
+          "New York, NY"
+        ],
+        "provider": "lever",
+        "source_id": "palantir-lever",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.514991+00:00"
+      },
+      {
+        "board_id": "quantco-",
+        "duration_ms": 2948,
+        "employer": "QuantCo",
+        "failure_category": null,
+        "internship_signal_count": 6,
+        "listing_count": 15,
+        "location_examples": [
+          "Europe",
+          "USA",
+          "Munich or Karlsruhe"
+        ],
+        "provider": "lever",
+        "source_id": "quantco-lever",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.524958+00:00"
+      },
+      {
+        "board_id": "spotify",
+        "duration_ms": 4976,
+        "employer": "Spotify",
+        "failure_category": "malformed_payload",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "spotify-lever",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:35.525122+00:00"
+      },
+      {
+        "board_id": "shopback-2",
+        "duration_ms": 4972,
+        "employer": "ShopBack",
+        "failure_category": null,
+        "internship_signal_count": 9,
+        "listing_count": 72,
+        "location_examples": [
+          "Kuala Lumpur, Malaysia",
+          "Sydney, Australia",
+          "Texas, United States"
+        ],
+        "provider": "lever",
+        "source_id": "shopback-lever",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.525128+00:00"
+      },
+      {
+        "board_id": "merklescience",
+        "duration_ms": 3174,
+        "employer": "Merkle Science",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 25,
+        "location_examples": [
+          "New York",
+          "Belgium",
+          "Bangalore"
+        ],
+        "provider": "lever",
+        "source_id": "merkle-science-lever",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.526582+00:00"
+      },
+      {
+        "board_id": "rover",
+        "duration_ms": 4740,
+        "employer": "Rover",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 23,
+        "location_examples": [
+          "Seattle",
+          "Barcelona",
+          "Spain"
+        ],
+        "provider": "lever",
+        "source_id": "rover-lever",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.527160+00:00"
+      },
+      {
+        "board_id": "xsolla",
+        "duration_ms": 3530,
+        "employer": "Xsolla",
+        "failure_category": "malformed_payload",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "xsolla-lever",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:35.528049+00:00"
+      },
+      {
+        "board_id": "Ashby",
+        "duration_ms": 235,
+        "employer": "Ashby",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 62,
+        "location_examples": [
+          "Remote - European Union | Spain | Italy | Germany | Switzerland | Denmark | Norway | Croatia | Ireland | Stockholm | Romania | Austria | Barcelona | Netherlands | Portugal | France | Berlin | Sweden | Hungary | Estonia",
+          "France | United Kingdom | Belgium | Germany | Switzerland | Ireland | Austria | Spain | Stuttgart | Berlin",
+          "Remote - US | Austin | Los Angeles | Portland | Salt Lake City | Waterloo | Boston | Remote - Canada | Seattle | New York | San Francisco | Vancouver | Denver | Toronto | Chicago"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:Ashby",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.528054+00:00"
+      },
+      {
+        "board_id": "cloudflare",
+        "duration_ms": 1077,
+        "employer": "Cloudflare",
+        "failure_category": null,
+        "internship_signal_count": 16,
+        "listing_count": 307,
+        "location_examples": [
+          "Washington, DC, United States",
+          "Austin, TX, United States",
+          "Austin, TX, United States | New York, New York, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "cloudflare-greenhouse",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.541223+00:00"
+      },
+      {
+        "board_id": "stripe",
+        "duration_ms": 1957,
+        "employer": "Stripe",
+        "failure_category": null,
+        "internship_signal_count": 10,
+        "listing_count": 575,
+        "location_examples": [
+          "San Francisco",
+          "SF, NYC, SEA, CHI",
+          "London"
+        ],
+        "provider": "greenhouse",
+        "source_id": "stripe-greenhouse",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.591178+00:00"
+      },
+      {
+        "board_id": "datadog",
+        "duration_ms": 1547,
+        "employer": "Datadog",
+        "failure_category": null,
+        "internship_signal_count": 6,
+        "listing_count": 448,
+        "location_examples": [
+          "Paris, Paris, France",
+          "New York, NY, United States",
+          "Boston, MA, United States | New York, NY, United States | San Francisco, CA, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "datadog-greenhouse",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.632278+00:00"
+      },
+      {
+        "board_id": "mongodb",
+        "duration_ms": 1271,
+        "employer": "MongoDB",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 405,
+        "location_examples": [
+          "Dublin, Ireland",
+          "Toronto, ON, Canada",
+          "Gurugram, Haryana, India"
+        ],
+        "provider": "greenhouse",
+        "source_id": "mongodb-greenhouse",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.673127+00:00"
+      },
+      {
+        "board_id": "monzo",
+        "duration_ms": 1607,
+        "employer": "Monzo",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 72,
+        "location_examples": [
+          "Barcelona",
+          "Cardiff, London or Remote (UK)",
+          "London"
+        ],
+        "provider": "greenhouse",
+        "source_id": "monzo-greenhouse",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.714695+00:00"
+      },
+      {
+        "board_id": "canonical",
+        "duration_ms": 792,
+        "employer": "Canonical",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 303,
+        "location_examples": [
+          "Home based - EMEA",
+          "Home based - EMEA; Office Based - London, UK",
+          "Home Based - Americas; Home based - EMEA; Home based - Worldwide"
+        ],
+        "provider": "greenhouse",
+        "source_id": "canonical-greenhouse",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.724638+00:00"
+      },
+      {
+        "board_id": "grafanalabs",
+        "duration_ms": 954,
+        "employer": "Grafana Labs",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 146,
+        "location_examples": [
+          "United States (Remote)",
+          "Republic of Ireland (Remote)",
+          "Spain (Remote)"
+        ],
+        "provider": "greenhouse",
+        "source_id": "grafana-labs-greenhouse",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.754601+00:00"
+      },
+      {
+        "board_id": "flix",
+        "duration_ms": 1017,
+        "employer": "Flix",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 137,
+        "location_examples": [
+          "New York, New York, United States",
+          "\u0421\u0442\u043e\u043b\u0438\u0447\u043d\u0430, Sia, Bulgaria",
+          "Gurugram, Haryana, India"
+        ],
+        "provider": "greenhouse",
+        "source_id": "flix-greenhouse",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.777740+00:00"
+      },
+      {
+        "board_id": "abridge",
+        "duration_ms": 58,
+        "employer": "Abridge",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 47,
+        "location_examples": [
+          "SF Office | NYC Office",
+          "United States - Remote",
+          "SF Office"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:abridge",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.787577+00:00"
+      },
+      {
+        "board_id": "airtable",
+        "duration_ms": 30,
+        "employer": "Airtable",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:airtable",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.794640+00:00"
+      },
+      {
+        "board_id": "browserbase",
+        "duration_ms": 31,
+        "employer": "Browserbase",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 9,
+        "location_examples": [
+          "San Francisco",
+          "San Francisco | New York",
+          "New York"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:browserbase",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.794653+00:00"
+      },
+      {
+        "board_id": "cursor",
+        "duration_ms": 78,
+        "employer": "Cursor",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 113,
+        "location_examples": [
+          "San Francisco | New York",
+          "San Francisco",
+          "San Francisco | New York | Remote"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:cursor",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.795120+00:00"
+      },
+      {
+        "board_id": "deel",
+        "duration_ms": 37,
+        "employer": "Deel",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:deel",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.802813+00:00"
+      },
+      {
+        "board_id": "hex",
+        "duration_ms": 44,
+        "employer": "Hex",
+        "failure_category": null,
+        "internship_signal_count": 29,
+        "listing_count": 29,
+        "location_examples": [
+          "New York",
+          "Eastern Time Zone",
+          "US Timezones"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:hex",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.802824+00:00"
+      },
+      {
+        "board_id": "linear",
+        "duration_ms": 44,
+        "employer": "Linear",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 32,
+        "location_examples": [
+          "Europe",
+          "North America",
+          "London"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:linear",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.804655+00:00"
+      },
+      {
+        "board_id": "maybern",
+        "duration_ms": 39,
+        "employer": "Maybern",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 13,
+        "location_examples": [
+          "New York Office",
+          "Charlotte | Denver | Phoenix | Dallas | Chicago | Atlanta | Miami",
+          "Remote"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:maybern",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.807615+00:00"
+      },
+      {
+        "board_id": "mercury",
+        "duration_ms": 214,
+        "employer": "Mercury",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:mercury",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.808774+00:00"
+      },
+      {
+        "board_id": "middesk",
+        "duration_ms": 1306,
+        "employer": "Middesk",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 21,
+        "location_examples": [
+          "San Francisco | New York",
+          "San Francisco",
+          "New York"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:middesk",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.808780+00:00"
+      },
+      {
+        "board_id": "modal",
+        "duration_ms": 805,
+        "employer": "Modal",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 31,
+        "location_examples": [
+          "New York | San Francisco",
+          "New York",
+          "New York | Stockholm"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:modal",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.810416+00:00"
+      },
+      {
+        "board_id": "montecarlodata",
+        "duration_ms": 1104,
+        "employer": "Monte Carlo",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 7,
+        "location_examples": [
+          "London",
+          "New York | Boston | Atlanta",
+          "San Francisco | San Diego | Seattle | Portland | Los Angeles"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:montecarlodata",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.812314+00:00"
+      },
+      {
+        "board_id": "neon",
+        "duration_ms": 619,
+        "employer": "Neon",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 6,
+        "location_examples": [
+          "New York City | San Francisco",
+          "New York City",
+          "Asia | South Korea"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:neon",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.813107+00:00"
+      },
+      {
+        "board_id": "newtonx",
+        "duration_ms": 602,
+        "employer": "NewtonX",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 10,
+        "location_examples": [
+          "New York City | Remote",
+          "Remote",
+          "New York City"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:newtonx",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.813606+00:00"
+      },
+      {
+        "board_id": "openai",
+        "duration_ms": 959,
+        "employer": "OpenAI",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 754,
+        "location_examples": [
+          "San Francisco",
+          "Tokyo, Japan",
+          "San Francisco | New York City | Seattle"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:openai",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.814410+00:00"
+      },
+      {
+        "board_id": "orum",
+        "duration_ms": 338,
+        "employer": "Orum",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 9,
+        "location_examples": [
+          "San Francisco Bay Area | Austin, TX",
+          "Austin, TX",
+          "San Francisco Bay Area"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:orum",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.903982+00:00"
+      },
+      {
+        "board_id": "pareto-ai",
+        "duration_ms": 160,
+        "employer": "Pareto",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 3,
+        "location_examples": [
+          "San Francisco Office, California",
+          "US Remote",
+          "San Francisco Office, California | US Remote"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:pareto-ai",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.904830+00:00"
+      },
+      {
+        "board_id": "pave",
+        "duration_ms": 40,
+        "employer": "Pave",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:pave",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.905071+00:00"
+      },
+      {
+        "board_id": "posthog",
+        "duration_ms": 39,
+        "employer": "PostHog",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 11,
+        "location_examples": [
+          "Remote",
+          "Remote (EMEA) | Remote (UK)",
+          "Remote (EMEA)"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:posthog",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.905076+00:00"
+      },
+      {
+        "board_id": "protege",
+        "duration_ms": 53,
+        "employer": "Protege",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 17,
+        "location_examples": [
+          "Remote"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:protege",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.906718+00:00"
+      },
+      {
+        "board_id": "ramp",
+        "duration_ms": 129,
+        "employer": "Ramp",
+        "failure_category": null,
+        "internship_signal_count": 4,
+        "listing_count": 135,
+        "location_examples": [
+          "New York, NY (HQ) | Remote (Canada) | Remote (US) | Miami, FL",
+          "New York, NY (HQ) | Remote (Canada) | San Francisco, CA | Remote (US)",
+          "New York, NY (HQ) | Remote (Canada) | San Francisco, CA | Remote (US) | Miami, FL"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:ramp",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.908719+00:00"
+      },
+      {
+        "board_id": "render",
+        "duration_ms": 43,
+        "employer": "Render",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 33,
+        "location_examples": [
+          "Remote: United States | Remote: Canada",
+          "Remote: United States | San Francisco HQ | Remote: Canada",
+          "Remote: United States"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:render",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.923052+00:00"
+      },
+      {
+        "board_id": "replit",
+        "duration_ms": 125,
+        "employer": "Replit",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 73,
+        "location_examples": [
+          "Foster City, CA",
+          "NYC (SoHo)",
+          "London Office"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:replit",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.927593+00:00"
+      },
+      {
+        "board_id": "sardine",
+        "duration_ms": 46,
+        "employer": "Sardine",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 35,
+        "location_examples": [
+          "North America",
+          "United Kingdom | Europe",
+          "Brazil | Florian\u00f3polis | Belo Horizonte | Curitiba | Campinas | S\u00e3o Jos\u00e9 dos Campos | S\u00e3o Paulo | Rio de Janeiro"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:sardine",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.934909+00:00"
+      },
+      {
+        "board_id": "supabase",
+        "duration_ms": 67,
+        "employer": "Supabase",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 58,
+        "location_examples": [
+          "Remote, Anywhere",
+          "Remote",
+          "Remote, San Francisco, CA"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:supabase",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.938554+00:00"
+      },
+      {
+        "board_id": "swarmaero",
+        "duration_ms": 37,
+        "employer": "Swarm Aero",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 23,
+        "location_examples": [
+          "San Francisco",
+          "Remote",
+          "Oxnard, CA"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:swarmaero",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.943871+00:00"
+      },
+      {
+        "board_id": "titan-ai",
+        "duration_ms": 70,
+        "employer": "Titan AI",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 12,
+        "location_examples": [
+          "United States"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:titan-ai",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.945491+00:00"
+      },
+      {
+        "board_id": "unit",
+        "duration_ms": 51,
+        "employer": "Unit",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 5,
+        "location_examples": [
+          "Tel Aviv Office",
+          "San Francisco",
+          "New York Office"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:unit",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.946349+00:00"
+      },
+      {
+        "board_id": "vanta",
+        "duration_ms": 110,
+        "employer": "Vanta",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 103,
+        "location_examples": [
+          "Remote U.S.",
+          "San Francisco, CA",
+          "Dublin, Ireland"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:vanta",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.946700+00:00"
+      },
+      {
+        "board_id": "vercel",
+        "duration_ms": 43,
+        "employer": "Vercel",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:vercel",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.958469+00:00"
+      },
+      {
+        "board_id": "warp",
+        "duration_ms": 35,
+        "employer": "Warp",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 18,
+        "location_examples": [
+          "New York"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:warp",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.958485+00:00"
+      },
+      {
+        "board_id": "watershed",
+        "duration_ms": 49,
+        "employer": "Watershed",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 34,
+        "location_examples": [
+          "London",
+          "New York City",
+          "New York City | San Francisco"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:watershed",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.959809+00:00"
+      },
+      {
+        "board_id": "xbowcareers",
+        "duration_ms": 42,
+        "employer": "XBOW",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 4,
+        "location_examples": [
+          "Austria (Remote) | Greece (Remote) | United Kingdom (Remote) | Switzerland (Remote) | US East Coast | Malta (Remote) | Brazil (Remote) | Spain (Remote) | Denmark(Remote) | Ireland (Remote) | Remote Argentina | Sweden (Remote)",
+          "US remote | Canada remote | Remote Argentina",
+          "Europe (Remote)"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:xbowcareers",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.962676+00:00"
+      },
+      {
+        "board_id": "zip",
+        "duration_ms": 99,
+        "employer": "Zip",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 129,
+        "location_examples": [
+          "San Francisco",
+          "Remote - West Coast",
+          "Toronto"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:zip",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.963110+00:00"
+      },
+      {
+        "board_id": "affirm",
+        "duration_ms": 426,
+        "employer": "Affirm",
+        "failure_category": null,
+        "internship_signal_count": 21,
+        "listing_count": 207,
+        "location_examples": [
+          "Remote US",
+          "Remote Canada",
+          "Remote Spain"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:affirm",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:35.975969+00:00"
+      },
+      {
+        "board_id": "airbnb",
+        "duration_ms": 4612,
+        "employer": "Airbnb",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 190,
+        "location_examples": [
+          "Berlin, Germany",
+          "Paris, France",
+          "Los Angeles, CA, United States | New York, New York, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:airbnb",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.000613+00:00"
+      },
+      {
+        "board_id": "anthropic",
+        "duration_ms": 2308,
+        "employer": "Anthropic",
+        "failure_category": null,
+        "internship_signal_count": 13,
+        "listing_count": 511,
+        "location_examples": [
+          "Singapore",
+          "Sydney, New South Wales, Australia",
+          "New York, New York, United States | San Francisco, California, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:anthropic",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.021654+00:00"
+      },
+      {
+        "board_id": "asana",
+        "duration_ms": 488,
+        "employer": "Asana",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 127,
+        "location_examples": [
+          "Warszawa, Masovian Voivodeship, Poland",
+          "San Francisco, California, United States",
+          "Reykjav\u00edk, Reykjav\u00edk, Iceland"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:asana",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.095238+00:00"
+      },
+      {
+        "board_id": "chime",
+        "duration_ms": 902,
+        "employer": "Chime",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 59,
+        "location_examples": [
+          "San Francisco, California, United States",
+          "Chicago, Illinois, United States",
+          "Chicago, IL, USA; New York, NY, USA; San Francisco, CA, USA"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:chime",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.110802+00:00"
+      },
+      {
+        "board_id": "coinbase",
+        "duration_ms": 596,
+        "employer": "Coinbase",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 175,
+        "location_examples": [
+          "Remote - USA",
+          "Remote - Canada",
+          "Remote - Cyprus"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:coinbase",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.119704+00:00"
+      },
+      {
+        "board_id": "databricks",
+        "duration_ms": 1450,
+        "employer": "Databricks",
+        "failure_category": null,
+        "internship_signal_count": 4,
+        "listing_count": 807,
+        "location_examples": [
+          "Tokyo, Japan",
+          "Mumbai, India",
+          "Sydney, Australia"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:databricks",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.134122+00:00"
+      },
+      {
+        "board_id": "discord",
+        "duration_ms": 681,
+        "employer": "Discord",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 51,
+        "location_examples": [
+          "San Francisco, California, United States",
+          "New York, New York, United States | San Francisco, California, United States",
+          "Remote US"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:discord",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.215160+00:00"
+      },
+      {
+        "board_id": "dropbox",
+        "duration_ms": 341,
+        "employer": "Dropbox",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 41,
+        "location_examples": [
+          "Remote - US: Select locations",
+          "Remote - Canada: Select locations",
+          "Remote - US: All locations"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:dropbox",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.219047+00:00"
+      },
+      {
+        "board_id": "figma",
+        "duration_ms": 1025,
+        "employer": "Figma",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 163,
+        "location_examples": [
+          "Berlin, Germany",
+          "San Francisco, CA \u2022 New York, NY \u2022 United States",
+          "Bengaluru, India"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:figma",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.223285+00:00"
+      },
+      {
+        "board_id": "flexport",
+        "duration_ms": 1444,
+        "employer": "Flexport",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 164,
+        "location_examples": [
+          "Atlanta Warehouse; Chicago Warehouse; Dallas Warehouse; New York City, New York, United States; Phillipsburg Warehouse; San Bernardino Warehouse",
+          "Amsterdam, Netherlands",
+          "Frankfurt, Germany; Hamburg, Germany"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:flexport",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.239064+00:00"
+      },
+      {
+        "board_id": "gitlab",
+        "duration_ms": 1461,
+        "employer": "GitLab",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 204,
+        "location_examples": [
+          "Remote, Italy",
+          "Remote, Bangalore",
+          "Remote, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:gitlab",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.259240+00:00"
+      },
+      {
+        "board_id": "instacart",
+        "duration_ms": 649,
+        "employer": "Instacart",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 119,
+        "location_examples": [
+          "United States - Remote",
+          "Canada - Remote (ON, AB, BC, or NS Only)",
+          "North Stanhope, New Jersey; Sparta, New Jersey; Sussex, New Jersey"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:instacart",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.296060+00:00"
+      },
+      {
+        "board_id": "lyft",
+        "duration_ms": 368,
+        "employer": "Lyft",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 161,
+        "location_examples": [
+          "New York, New York, United States",
+          "Toronto, Ontario, Canada",
+          "California, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:lyft",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.308337+00:00"
+      },
+      {
+        "board_id": "pinterest",
+        "duration_ms": 789,
+        "employer": "Pinterest",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 225,
+        "location_examples": [
+          "San Francisco, CA, US",
+          "Tokyo, JP",
+          "New York, NY, US"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:pinterest",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.324201+00:00"
+      },
+      {
+        "board_id": "robinhood",
+        "duration_ms": 640,
+        "employer": "Robinhood",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 130,
+        "location_examples": [
+          "Clearwater, FL",
+          "New York, NY",
+          "Menlo Park, CA"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:robinhood",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.350136+00:00"
+      },
+      {
+        "board_id": "samsara",
+        "duration_ms": 958,
+        "employer": "Samsara",
+        "failure_category": null,
+        "internship_signal_count": 7,
+        "listing_count": 264,
+        "location_examples": [
+          "Remote - Mexico",
+          "Remote - Netherlands",
+          "Germany"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:samsara",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.364044+00:00"
+      },
+      {
+        "board_id": "matchgroup",
+        "duration_ms": 967,
+        "employer": "Match Group",
+        "failure_category": "malformed_payload",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:matchgroup",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.405534+00:00"
+      },
+      {
+        "board_id": "netflix",
+        "duration_ms": 366,
+        "employer": "Netflix",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:netflix",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.405546+00:00"
+      },
+      {
+        "board_id": "plaid",
+        "duration_ms": 415,
+        "employer": "Plaid",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:plaid",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.405550+00:00"
+      },
+      {
+        "board_id": "ro",
+        "duration_ms": 737,
+        "employer": "Ro",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 51,
+        "location_examples": [
+          "Romeoville, IL",
+          "Boynton Beach, FL",
+          "New York, NY or Remote"
+        ],
+        "provider": "lever",
+        "source_id": "lever:ro",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.405561+00:00"
+      },
+      {
+        "board_id": "voleon",
+        "duration_ms": 486,
+        "employer": "Voleon",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:voleon",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.407398+00:00"
+      },
+      {
+        "board_id": "generalmatter",
+        "duration_ms": 1054,
+        "employer": "General Matter",
+        "failure_category": null,
+        "internship_signal_count": 17,
+        "listing_count": 109,
+        "location_examples": [
+          "Los Angeles, California, United States",
+          "Paducah, Kentucky, United States",
+          "Hanford, Washington, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:generalmatter",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.407404+00:00"
+      },
+      {
+        "board_id": "gardacp",
+        "duration_ms": 289,
+        "employer": "Garda Capital Partners",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 12,
+        "location_examples": [
+          "Geneva, Geneva, Switzerland",
+          "New York, New York, United States",
+          "Wayzata, Minnesota, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:gardacp",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.416902+00:00"
+      },
+      {
+        "board_id": "notion",
+        "duration_ms": 148,
+        "employer": "Notion",
+        "failure_category": null,
+        "internship_signal_count": 5,
+        "listing_count": 128,
+        "location_examples": [
+          "New York, New York",
+          "San Francisco, California",
+          "San Francisco, California | New York, New York"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:notion",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.417677+00:00"
+      },
+      {
+        "board_id": "dvtrading",
+        "duration_ms": 334,
+        "employer": "DV Trading",
+        "failure_category": null,
+        "internship_signal_count": 8,
+        "listing_count": 60,
+        "location_examples": [
+          "Hong Kong",
+          "London",
+          "New York"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:dvtrading",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.433012+00:00"
+      },
+      {
+        "board_id": "cssmerge",
+        "duration_ms": 766,
+        "employer": "Atoms",
+        "failure_category": null,
+        "internship_signal_count": 20,
+        "listing_count": 250,
+        "location_examples": [
+          "Tokyo, JPN",
+          "Hong Kong",
+          "Los Angeles, California, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:cssmerge",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.440198+00:00"
+      },
+      {
+        "board_id": "axontalentcommunity",
+        "duration_ms": 410,
+        "employer": "Axon",
+        "failure_category": null,
+        "internship_signal_count": 4,
+        "listing_count": 8,
+        "location_examples": [
+          "Boston, Massachusetts, United States | Washington, United States",
+          "Scottsdale, Arizona, United States",
+          "Atlanta, Georgia, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:axontalentcommunity",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.458813+00:00"
+      },
+      {
+        "board_id": "thenuclearcompany",
+        "duration_ms": 414,
+        "employer": "The Nuclear Company",
+        "failure_category": null,
+        "internship_signal_count": 13,
+        "listing_count": 76,
+        "location_examples": [
+          "Washington, District of Columbia, United States",
+          "Columbia, South Carolina, United States",
+          "Columbia, South Carolina, United States | Washington, District of Columbia, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:thenuclearcompany",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.459228+00:00"
+      },
+      {
+        "board_id": "belvederetrading",
+        "duration_ms": 478,
+        "employer": "Belvedere Trading",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 14,
+        "location_examples": [
+          "Chicago, Illinois",
+          "Singapore",
+          "Miami, Florida"
+        ],
+        "provider": "lever",
+        "source_id": "lever:belvederetrading",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.467977+00:00"
+      },
+      {
+        "board_id": "spacex",
+        "duration_ms": 7007,
+        "employer": "SpaceX",
+        "failure_category": null,
+        "internship_signal_count": 254,
+        "listing_count": 2174,
+        "location_examples": [
+          "Hawthorne, CA, United States",
+          "Palo Alto, California, United States",
+          "Hawthorne, CA, United States | Brownsville, TX, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:spacex",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.468395+00:00"
+      },
+      {
+        "board_id": "chicagotradingcampus",
+        "duration_ms": 504,
+        "employer": "Chicago Trading Company",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 8,
+        "location_examples": [
+          "Chicago, Illinois, United States | New York, New York, United States",
+          "London, England, United Kingdom",
+          "Chicago, Illinois, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:chicagotradingcampus",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.664833+00:00"
+      },
+      {
+        "board_id": "hyannisportresearch",
+        "duration_ms": 324,
+        "employer": "HPR (Hyannis Port Research)",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 10,
+        "location_examples": [
+          "Needham, Massachusetts, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:hyannisportresearch",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.665380+00:00"
+      },
+      {
+        "board_id": "melius",
+        "duration_ms": 35,
+        "employer": "Melius",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 8,
+        "location_examples": [
+          "New York City"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:melius",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.665828+00:00"
+      },
+      {
+        "board_id": "heliux",
+        "duration_ms": 27,
+        "employer": "Heliux",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 8,
+        "location_examples": [
+          "HQ (San Francisco, CA)"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:heliux",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.666201+00:00"
+      },
+      {
+        "board_id": "virtu",
+        "duration_ms": 277,
+        "employer": "Virtu Financial",
+        "failure_category": null,
+        "internship_signal_count": 15,
+        "listing_count": 46,
+        "location_examples": [
+          "Singapore",
+          "Dublin, Ireland",
+          "New York"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:virtu",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.666553+00:00"
+      },
+      {
+        "board_id": "pdtpartners",
+        "duration_ms": 306,
+        "employer": "PDT Partners",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 10,
+        "location_examples": [
+          "New York, NY, United States",
+          "London, United Kingdom"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:pdtpartners",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.668733+00:00"
+      },
+      {
+        "board_id": "quadrillion-labs",
+        "duration_ms": 89,
+        "employer": "Quadrillion",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 8,
+        "location_examples": [
+          "New York City"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:quadrillion-labs",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.669550+00:00"
+      },
+      {
+        "board_id": "appian",
+        "duration_ms": 427,
+        "employer": "Appian",
+        "failure_category": null,
+        "internship_signal_count": 6,
+        "listing_count": 176,
+        "location_examples": [
+          "London, United Kingdom",
+          "Milan, Italy",
+          "Amsterdam, Netherlands"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:appian",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.669988+00:00"
+      },
+      {
+        "board_id": "ctccampusboard",
+        "duration_ms": 352,
+        "employer": "Chicago Trading Company",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 6,
+        "location_examples": [
+          "Chicago, Illinois, United States | New York, New York, United States",
+          "Chicago, Illinois, United States",
+          "London, England, United Kingdom"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:ctccampusboard",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.693334+00:00"
+      },
+      {
+        "board_id": "netic",
+        "duration_ms": 104,
+        "employer": "Cybernetic Labs",
+        "failure_category": null,
+        "internship_signal_count": 4,
+        "listing_count": 28,
+        "location_examples": [
+          "San Francisco"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:netic",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.693803+00:00"
+      },
+      {
+        "board_id": "circleback",
+        "duration_ms": 238,
+        "employer": "Circleback",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 11,
+        "location_examples": [
+          "San Francisco"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:circleback",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.695452+00:00"
+      },
+      {
+        "board_id": "pylon-labs",
+        "duration_ms": 269,
+        "employer": "Pylon",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 20,
+        "location_examples": [
+          "San Francisco",
+          "New York",
+          "London, UK"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:pylon-labs",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.696064+00:00"
+      },
+      {
+        "board_id": "mwinternshipprogram",
+        "duration_ms": 341,
+        "employer": "Marshall Wace",
+        "failure_category": null,
+        "internship_signal_count": 5,
+        "listing_count": 5,
+        "location_examples": [
+          "London",
+          "Singapore, Central, Singapore",
+          "Hong Kong"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:mwinternshipprogram",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.697386+00:00"
+      },
+      {
+        "board_id": "ctgt",
+        "duration_ms": 163,
+        "employer": "CTGT",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 3,
+        "location_examples": [
+          "San Francisco"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:ctgt",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.697476+00:00"
+      },
+      {
+        "board_id": "imc",
+        "duration_ms": 364,
+        "employer": "IMC Trading",
+        "failure_category": null,
+        "internship_signal_count": 18,
+        "listing_count": 166,
+        "location_examples": [
+          "Europe",
+          "Aarhus, Central Denmark Region, Denmark",
+          "Chicago, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:imc",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.697638+00:00"
+      },
+      {
+        "board_id": "xantium",
+        "duration_ms": 346,
+        "employer": "Xantium",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 7,
+        "location_examples": [
+          "Abu Dhabi, United Arab Emirates | London, England, United Kingdom | New York, New York, United States | Salt Lake City, Utah, United States",
+          "London, England, United Kingdom",
+          "London, England, United Kingdom | New York, New York, United States | Salt Lake City, Utah, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:xantium",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.707023+00:00"
+      },
+      {
+        "board_id": "mavensecuritiesholdingltd",
+        "duration_ms": 1370,
+        "employer": "Maven Securities",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 39,
+        "location_examples": [
+          "London, Greater London, England, United Kingdom",
+          "Amsterdam, North Holland, Netherlands",
+          "Hong Kong"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:mavensecuritiesholdingltd",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.707210+00:00"
+      },
+      {
+        "board_id": "emergingtalent",
+        "duration_ms": 389,
+        "employer": "Maven Securities",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 2,
+        "location_examples": [
+          "Chicago"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:emergingtalent",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.709240+00:00"
+      },
+      {
+        "board_id": "uvimco",
+        "duration_ms": 334,
+        "employer": "University of Virginia Investment Management Company (UVIMCO)",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 3,
+        "location_examples": [
+          "Charlottesville, Virginia, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:uvimco",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.709395+00:00"
+      },
+      {
+        "board_id": "anthelioncap",
+        "duration_ms": 37,
+        "employer": "Anthelion Capital",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 3,
+        "location_examples": [
+          "New York City"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:anthelioncap",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.709647+00:00"
+      },
+      {
+        "board_id": "optiverprivate",
+        "duration_ms": 324,
+        "employer": "Optiver",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 10,
+        "location_examples": [
+          "Sydney, New South Wales, Australia",
+          "Austin, Texas, United States | Chicago, Illinois, United States | New York, New York, United States",
+          "Chicago, Illinois, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:optiverprivate",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.709765+00:00"
+      },
+      {
+        "board_id": "voloridgeinvestmentmanagement",
+        "duration_ms": 16513,
+        "employer": "Voloridge",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 6,
+        "location_examples": [
+          "Jupiter, Florida, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:voloridgeinvestmentmanagement",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.710139+00:00"
+      },
+      {
+        "board_id": "drweng",
+        "duration_ms": 577,
+        "employer": "DRW",
+        "failure_category": null,
+        "internship_signal_count": 24,
+        "listing_count": 165,
+        "location_examples": [
+          "New York, NY, United States",
+          "London, United Kingdom",
+          "Montreal, QC, Canada"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:drweng",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.710339+00:00"
+      },
+      {
+        "board_id": "flowtraders",
+        "duration_ms": 325,
+        "employer": "Flow Traders",
+        "failure_category": null,
+        "internship_signal_count": 44,
+        "listing_count": 47,
+        "location_examples": [
+          "Amsterdam, Noord-Holland, Netherlands",
+          "New York, New York, United States",
+          "Amsterdam, Noord-Holland, Netherlands | Hong Kong | New York, New York, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:flowtraders",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.721222+00:00"
+      },
+      {
+        "board_id": "freeformfuturecorp",
+        "duration_ms": 955,
+        "employer": "Freeform",
+        "failure_category": null,
+        "internship_signal_count": 13,
+        "listing_count": 74,
+        "location_examples": [
+          "El Segundo, California, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:freeformfuturecorp",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.723765+00:00"
+      },
+      {
+        "board_id": "airwallex",
+        "duration_ms": 470,
+        "employer": "Airwallex",
+        "failure_category": null,
+        "internship_signal_count": 6,
+        "listing_count": 608,
+        "location_examples": [
+          "HK - Hong Kong SAR",
+          "CN - Shanghai",
+          "SG - Singapore"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:airwallex",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.729384+00:00"
+      },
+      {
+        "board_id": "cohere",
+        "duration_ms": 172,
+        "employer": "Cohere",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 150,
+        "location_examples": [
+          "New York | San Francisco | Toronto",
+          "London | San Francisco | New York | Paris | Toronto | Montreal",
+          "New York | London | United States | Toronto"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:cohere",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.804793+00:00"
+      },
+      {
+        "board_id": "deliveroo",
+        "duration_ms": 356,
+        "employer": "Deliveroo",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 181,
+        "location_examples": [
+          "Manchester - Main Office",
+          "Dubai - Main Office",
+          "London - The River Building HQ"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:deliveroo",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.822684+00:00"
+      },
+      {
+        "board_id": "thoughtmachine",
+        "duration_ms": 218,
+        "employer": "Thought Machine",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:thoughtmachine",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.840572+00:00"
+      },
+      {
+        "board_id": "weaviate",
+        "duration_ms": 99,
+        "employer": "Weaviate",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 1,
+        "location_examples": [
+          "CET, GMT or EST timezones"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:weaviate",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.840586+00:00"
+      },
+      {
+        "board_id": "ventitechnologies",
+        "duration_ms": 170,
+        "employer": "Venti Technologies",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:ventitechnologies",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.840722+00:00"
+      },
+      {
+        "board_id": "bloxd",
+        "duration_ms": 111,
+        "employer": "Bloxd",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 1,
+        "location_examples": [
+          "Kings Cross, London Office"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:bloxd",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.840726+00:00"
+      },
+      {
+        "board_id": "deductiveai",
+        "duration_ms": 110,
+        "employer": "Deductive AI",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:deductiveai",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.840791+00:00"
+      },
+      {
+        "board_id": "elevenlabs",
+        "duration_ms": 227,
+        "employer": "ElevenLabs",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 255,
+        "location_examples": [
+          "India",
+          "United States | New York | San Francisco",
+          "Japan | Tokyo"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:elevenlabs",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.840793+00:00"
+      },
+      {
+        "board_id": "harvey",
+        "duration_ms": 213,
+        "employer": "Harvey",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 361,
+        "location_examples": [
+          "Madrid",
+          "London",
+          "New York"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:harvey",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.866184+00:00"
+      },
+      {
+        "board_id": "scaleai",
+        "duration_ms": 36,
+        "employer": "Scale AI",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:scaleai",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.899305+00:00"
+      },
+      {
+        "board_id": "perplexity",
+        "duration_ms": 134,
+        "employer": "Perplexity",
+        "failure_category": null,
+        "internship_signal_count": 3,
+        "listing_count": 100,
+        "location_examples": [
+          "San Francisco | New York City",
+          "Tokyo",
+          "San Francisco | Palo Alto | New York City"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:perplexity",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.899319+00:00"
+      },
+      {
+        "board_id": "sierra",
+        "duration_ms": 170,
+        "employer": "Sierra",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 193,
+        "location_examples": [
+          "San Francisco, CA | US - Remote | New York, NY | Atlanta, GA",
+          "San Francisco, CA | New York, NY",
+          "US - Remote | San Francisco, CA | New York, NY | Atlanta, GA"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:sierra",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.904762+00:00"
+      },
+      {
+        "board_id": "crusoe",
+        "duration_ms": 239,
+        "employer": "Crusoe",
+        "failure_category": null,
+        "internship_signal_count": 7,
+        "listing_count": 371,
+        "location_examples": [
+          "San Francisco, CA - US",
+          "Dublin - IE",
+          "Arvada, CO - US"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:crusoe",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.928324+00:00"
+      },
+      {
+        "board_id": "mistral",
+        "duration_ms": 34,
+        "employer": "Mistral AI",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:mistral",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.967160+00:00"
+      },
+      {
+        "board_id": "lilt",
+        "duration_ms": 253,
+        "employer": "Lilt",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:lilt",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.967174+00:00"
+      },
+      {
+        "board_id": "baseten",
+        "duration_ms": 104,
+        "employer": "Baseten",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 76,
+        "location_examples": [
+          "San Francisco | Toronto | New York | Montreal",
+          "San Francisco",
+          "San Francisco | Remote | Toronto | New York | Montreal"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:baseten",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.967177+00:00"
+      },
+      {
+        "board_id": "togetherai",
+        "duration_ms": 78,
+        "employer": "Together AI",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:togetherai",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.973441+00:00"
+      },
+      {
+        "board_id": "characterai",
+        "duration_ms": 95,
+        "employer": "Character AI",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:characterai",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.973447+00:00"
+      },
+      {
+        "board_id": "anduril",
+        "duration_ms": 56,
+        "employer": "Anduril",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:anduril",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.973450+00:00"
+      },
+      {
+        "board_id": "hume",
+        "duration_ms": 51,
+        "employer": "Hume AI",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "ashby",
+        "source_id": "ashby:hume",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:36.973452+00:00"
+      },
+      {
+        "board_id": "decagon",
+        "duration_ms": 89,
+        "employer": "Decagon",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 137,
+        "location_examples": [
+          "San Francisco",
+          "San Francisco | New York City",
+          "Remote"
+        ],
+        "provider": "ashby",
+        "source_id": "ashby:decagon",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.973455+00:00"
+      },
+      {
+        "board_id": "andurilindustries",
+        "duration_ms": 9664,
+        "employer": "Anduril",
+        "failure_category": null,
+        "internship_signal_count": 35,
+        "listing_count": 2238,
+        "location_examples": [
+          "Atlanta, Georgia, United States | Costa Mesa, California, United States | Fort Collins, Colorado, United States",
+          "Costa Mesa, California, United States",
+          "Costa Mesa, California, United States | Irvine, California, United States | Santa Ana, California, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:andurilindustries",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:36.985145+00:00"
+      },
+      {
+        "board_id": "benchling",
+        "duration_ms": 260,
+        "employer": "Benchling",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:benchling",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.322647+00:00"
+      },
+      {
+        "board_id": "checkr",
+        "duration_ms": 314,
+        "employer": "Checkr",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 45,
+        "location_examples": [
+          "San Francisco, California, United States",
+          "Denver, Colorado, United States | San Francisco, California, United States",
+          "Denver, Colorado, United States | Nashville, Tennessee, United States"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:checkr",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.322660+00:00"
+      },
+      {
+        "board_id": "cockroachlabs",
+        "duration_ms": 279,
+        "employer": "Cockroach Labs",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 27,
+        "location_examples": [
+          "New York, NY, United States",
+          "Toronto, Ontario, Canada",
+          "Bengaluru, Karnataka, India"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:cockroachlabs",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.327109+00:00"
+      },
+      {
+        "board_id": "confluent",
+        "duration_ms": 349,
+        "employer": "Confluent",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:confluent",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.330261+00:00"
+      },
+      {
+        "board_id": "dataminr",
+        "duration_ms": 265,
+        "employer": "Dataminr",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:dataminr",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.330266+00:00"
+      },
+      {
+        "board_id": "deepl",
+        "duration_ms": 259,
+        "employer": "DeepL",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:deepl",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.330269+00:00"
+      },
+      {
+        "board_id": "drata",
+        "duration_ms": 259,
+        "employer": "Drata",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:drata",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.330272+00:00"
+      },
+      {
+        "board_id": "duckduckgo",
+        "duration_ms": 258,
+        "employer": "DuckDuckGo",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:duckduckgo",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.330275+00:00"
+      },
+      {
+        "board_id": "gusto",
+        "duration_ms": 1368,
+        "employer": "Gusto",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 91,
+        "location_examples": [
+          "Denver, CO - Hybrid",
+          "Denver, CO",
+          "Phoenix, AZ - Remote"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:gusto",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.330277+00:00"
+      },
+      {
+        "board_id": "hackerrank",
+        "duration_ms": 469,
+        "employer": "HackerRank",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 29,
+        "location_examples": [
+          "Remote in San Francisco Bay Area, Los Angeles, Seattle",
+          "Hybrid in Bangalore, India",
+          "Remote Globally"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:hackerrank",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.343382+00:00"
+      },
+      {
+        "board_id": "hightouch",
+        "duration_ms": 895,
+        "employer": "Hightouch",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 73,
+        "location_examples": [
+          "Hybrid (SF, NYC or Denver)",
+          "New York, New York, United States",
+          "Remote (North America)"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:hightouch",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.345854+00:00"
+      },
+      {
+        "board_id": "huggingface",
+        "duration_ms": 263,
+        "employer": "Hugging Face",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:huggingface",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.352594+00:00"
+      },
+      {
+        "board_id": "lucidsoftware",
+        "duration_ms": 12175,
+        "employer": "Lucid Software",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 28,
+        "location_examples": [
+          "Melbourne, Victoria, Australia",
+          "Salt Lake City, Utah, United States",
+          "Amsterdam, North Holland, Netherlands"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:lucidsoftware",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.352653+00:00"
+      },
+      {
+        "board_id": "neo4j",
+        "duration_ms": 509,
+        "employer": "Neo4j",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 45,
+        "location_examples": [
+          "Remote: India",
+          "Remote: San Mateo area",
+          "Remote: Germany"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:neo4j",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.354885+00:00"
+      },
+      {
+        "board_id": "pagerduty",
+        "duration_ms": 283,
+        "employer": "PagerDuty",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 29,
+        "location_examples": [
+          "Remote (USA)",
+          "Lisbon",
+          "Atlanta"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:pagerduty",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.361440+00:00"
+      },
+      {
+        "board_id": "persona",
+        "duration_ms": 317,
+        "employer": "Persona",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:persona",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.366134+00:00"
+      },
+      {
+        "board_id": "project44",
+        "duration_ms": 309,
+        "employer": "project44",
+        "failure_category": null,
+        "internship_signal_count": 2,
+        "listing_count": 32,
+        "location_examples": [
+          "Bengaluru, India",
+          "Dallas",
+          "Chicago, IL (Hybrid) OR Remote"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:project44",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.366139+00:00"
+      },
+      {
+        "board_id": "procore",
+        "duration_ms": 660,
+        "employer": "Procore",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:procore",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.370759+00:00"
+      },
+      {
+        "board_id": "reddit",
+        "duration_ms": 574,
+        "employer": "Reddit",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 151,
+        "location_examples": [
+          "New York, NY, United States",
+          "Remote - United States",
+          "Berlin, Berlin, Germany"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:reddit",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.370771+00:00"
+      },
+      {
+        "board_id": "snyk",
+        "duration_ms": 260,
+        "employer": "Snyk",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:snyk",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.388331+00:00"
+      },
+      {
+        "board_id": "squarespace",
+        "duration_ms": 287,
+        "employer": "Squarespace",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 24,
+        "location_examples": [
+          "New York City",
+          "Remote",
+          "Dublin"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:squarespace",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.388342+00:00"
+      },
+      {
+        "board_id": "twilio",
+        "duration_ms": 1595,
+        "employer": "Twilio",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 146,
+        "location_examples": [
+          "Remote - Singapore",
+          "Remote - Australia",
+          "Remote - India"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:twilio",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.390852+00:00"
+      },
+      {
+        "board_id": "webflow",
+        "duration_ms": 1404,
+        "employer": "Webflow",
+        "failure_category": null,
+        "internship_signal_count": 1,
+        "listing_count": 29,
+        "location_examples": [
+          "London, U.K. (Hybrid)",
+          "CA Remote (BC & ON only); U.S. Remote",
+          "U.S. Remote"
+        ],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:webflow",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.411222+00:00"
+      },
+      {
+        "board_id": "wistia",
+        "duration_ms": 425,
+        "employer": "Wistia",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:wistia",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415431+00:00"
+      },
+      {
+        "board_id": "yelp",
+        "duration_ms": 374,
+        "employer": "Yelp",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:yelp",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415437+00:00"
+      },
+      {
+        "board_id": "zapier",
+        "duration_ms": 264,
+        "employer": "Zapier",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:zapier",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415440+00:00"
+      },
+      {
+        "board_id": "monday",
+        "duration_ms": 260,
+        "employer": "monday.com",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "greenhouse",
+        "source_id": "greenhouse:monday",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415444+00:00"
+      },
+      {
+        "board_id": "apollo",
+        "duration_ms": 316,
+        "employer": "Apollo.io",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:apollo",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415446+00:00"
+      },
+      {
+        "board_id": "carta",
+        "duration_ms": 314,
+        "employer": "Carta",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:carta",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415449+00:00"
+      },
+      {
+        "board_id": "chainalysis",
+        "duration_ms": 315,
+        "employer": "Chainalysis",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:chainalysis",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415452+00:00"
+      },
+      {
+        "board_id": "circleci",
+        "duration_ms": 312,
+        "employer": "CircleCI",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:circleci",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415454+00:00"
+      },
+      {
+        "board_id": "clari",
+        "duration_ms": 2363,
+        "employer": "Clari",
+        "failure_category": null,
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:clari",
+        "verification_status": "verified",
+        "verified_at": "2026-08-21T23:00:37.415457+00:00"
+      },
+      {
+        "board_id": "contentful",
+        "duration_ms": 330,
+        "employer": "Contentful",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:contentful",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415462+00:00"
+      },
+      {
+        "board_id": "coursera",
+        "duration_ms": 2287,
+        "employer": "Coursera",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:coursera",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415464+00:00"
+      },
+      {
+        "board_id": "hackerone",
+        "duration_ms": 310,
+        "employer": "HackerOne",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:hackerone",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415467+00:00"
+      },
+      {
+        "board_id": "intercom",
+        "duration_ms": 2513,
+        "employer": "Intercom",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:intercom",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415469+00:00"
+      },
+      {
+        "board_id": "mural",
+        "duration_ms": 2418,
+        "employer": "MURAL",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:mural",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415472+00:00"
+      },
+      {
+        "board_id": "mixpanel",
+        "duration_ms": 1365,
+        "employer": "Mixpanel",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:mixpanel",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415475+00:00"
+      },
+      {
+        "board_id": "netlify",
+        "duration_ms": 1350,
+        "employer": "Netlify",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:netlify",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415477+00:00"
+      },
+      {
+        "board_id": "postman",
+        "duration_ms": 440,
+        "employer": "Postman",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:postman",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415480+00:00"
+      },
+      {
+        "board_id": "rippling",
+        "duration_ms": 433,
+        "employer": "Rippling",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:rippling",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415482+00:00"
+      },
+      {
+        "board_id": "truelayer",
+        "duration_ms": 313,
+        "employer": "TrueLayer",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:truelayer",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415485+00:00"
+      },
+      {
+        "board_id": "zapier",
+        "duration_ms": 329,
+        "employer": "Zapier",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:zapier",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415487+00:00"
+      },
+      {
+        "board_id": "zipline",
+        "duration_ms": 309,
+        "employer": "Zipline",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:zipline",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415489+00:00"
+      },
+      {
+        "board_id": "gusto",
+        "duration_ms": 328,
+        "employer": "Gusto",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:gusto",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415491+00:00"
+      },
+      {
+        "board_id": "benchling",
+        "duration_ms": 311,
+        "employer": "Benchling",
+        "failure_category": "unknown_safe_error",
+        "internship_signal_count": 0,
+        "listing_count": 0,
+        "location_examples": [],
+        "provider": "lever",
+        "source_id": "lever:benchling",
+        "verification_status": "failed",
+        "verified_at": "2026-08-21T23:00:37.415493+00:00"
+      }
+    ]
+  }
+}
