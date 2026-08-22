@@ -102,6 +102,20 @@ class StateBundleTests(TestCase):
                 bundle.extractall(restored_state)
 
             validate_state_bundle(restored_state)
+            self.assertEqual(
+                {path.name for path in restored_state.iterdir()},
+                {"manifest.json", "jobs.sqlite3", "notifications.sqlite3"},
+            )
+            create_state_manifest(restored_state)
+            self.assertEqual(
+                {path.name for path in restored_state.iterdir()},
+                {"manifest.json", "jobs.sqlite3", "notifications.sqlite3"},
+            )
+            (restored_state / "unexpected.txt").write_text("unexpected", encoding="utf-8")
+            self.assertNotEqual(
+                {path.name for path in restored_state.iterdir()},
+                {"manifest.json", "jobs.sqlite3", "notifications.sqlite3"},
+            )
             workspace = restored_state.parent
             self.assertFalse((workspace / "manifest.json").exists())
             self.assertFalse((workspace / "jobs.sqlite3").exists())

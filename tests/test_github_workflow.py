@@ -25,6 +25,8 @@ class GitHubWorkflowTests(TestCase):
         self.assertIn("initialize_state", text)
         self.assertIn("state_bundle validate", text)
         self.assertIn("state_bundle create", text)
+        self.assertEqual(text.count("! -name manifest.json -print -quit)"), 2)
+        self.assertIn("unzip -q /tmp/internship-monitor-state.zip -d state", text)
         self.assertNotIn("internship-monitor deliver", text)
         self.assertNotIn("actions/cache", text)
         self.assertEqual(workflow["permissions"]["contents"], "read")

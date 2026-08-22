@@ -125,7 +125,7 @@ jobs:
       - name: Create state manifest
         run: |
           unexpected="$(find state -mindepth 1 -maxdepth 1 \
-            ! -name jobs.sqlite3 ! -name notifications.sqlite3 -print -quit)"
+            ! -name jobs.sqlite3 ! -name notifications.sqlite3 ! -name manifest.json -print -quit)"
           if [ -n "${unexpected}" ]; then
             echo "Unexpected state file would enter the authoritative artifact: ${unexpected}" >&2
             exit 1
